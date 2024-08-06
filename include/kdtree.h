@@ -46,7 +46,7 @@ typedef struct{
     int direct_path;
     // For queries
     int k;
-    struct pqheap * pq;
+    struct pqheap * pq; // needs to be here?
     size_t * KN; // for storing idx of K neighbours
     // FILE * log;
     // Temporary buffers

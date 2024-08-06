@@ -106,7 +106,10 @@ void node_shuffle(double * X, size_t * idx, size_t kk)
 
 // Sort the elements in the final nodes radially ?
 // or unsort them?
-void kdtree_split(kdtree_t * T, double * X, size_t * idx, size_t n_points, double xmin, double xmax, double ymin, double ymax)
+void
+kdtree_split(kdtree_t * T,
+             double * X, size_t * idx, size_t n_points,
+             double xmin, double xmax, double ymin, double ymax)
 {
     kdtree_node_t * node = T->root + T->next;
 
@@ -152,7 +155,9 @@ void kdtree_split(kdtree_t * T, double * X, size_t * idx, size_t n_points, doubl
     }
     node->var = var;
 
-    double pivot, rxmin, rxmax, rymin, rymax, lxmin, lxmax, lymin, lymax = 0;
+    double pivot,
+        rxmin, rxmax, rymin, rymax,
+        lxmin, lxmax, lymin, lymax = 0;
 
     if(var == 0)
     {
@@ -253,11 +258,13 @@ kdtree_new(const double * X, size_t N, int binsize)
 
     T->median_buffer = malloc(N*sizeof(double));
 
+    /* Recursive construction */
     kdtree_split(T, X, idx_list, N, xmin, xmax, ymin, ymax);
 
     free(T->median_buffer);
     T->median_buffer = NULL;
     T->n_nodes = T->next;
+    /* TODO: did we allocate more than needed? */
     free(idx_list);
 
     return T;
