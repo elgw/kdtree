@@ -16,15 +16,11 @@
 struct pqheap;
 
 typedef struct {
-    size_t number; // node number
+    size_t id; // number; // node number
     size_t n_points; // number of points
-    double geometry[2*KDTREE_MAXDIM]; // TODO: replaces xmin, xmax, ...
-    double xmin; // domain of points
-    double xmax;
-    double ymin;
-    double ymax;
-    int var; // split variable
-    double pivot; //
+    double bbx[2*KDTREE_MAXDIM];
+    int split_dim; // var // TODO: not needed
+    double pivot; // TODO not needed
     int node_left; // children
     int node_right;
     size_t * idx; // Pointer to the local idx
@@ -33,34 +29,39 @@ typedef struct {
 } kdtree_node_t;
 
 typedef struct{
-    kdtree_node_t * root;
+    size_t ndim; // Number of dimensions
+    size_t binsize;
+
+    /* Node allocation  */
+    kdtree_node_t * nodes; /* Array of nodes, nodes[0] is the root */
     size_t n_nodes; // Total number of nodes
     size_t next; // What node to write to during construction
-    size_t ndim; // Number of dimensions
-    size_t * idx_local; // For node idx storage
-    double * X_local; // For node coordinate storage
+
+
+    size_t * idx_local; // For node idx storage // TODO remove
+    double * X_local; // For node coordinate storage // TODO remove
     size_t next_idx; // Where to start writing idx
-    size_t binsize;
+
+
     double * X; // pointer to supplied data
     size_t N; // Number of supplied points
+
     int direct_path;
     // For queries
     int k;
     struct pqheap * pq; // needs to be here?
     size_t * KN; // for storing idx of K neighbours
     // FILE * log;
+
     // Temporary buffers
     double * median_buffer;
-    double xmin;
-    double xmax;
-    double ymin;
-    double ymax;
+
 } kdtree_t;
 
 /* According to [1] a binsize of 4-32 elements is optimal
  * regardless of k and the number of dimensions */
 kdtree_t * kdtree_new(const double * X,
-                      size_t N, int binsize);
+                      size_t N, size_t ndim, int binsize);
 
 
 void kdtree_free(kdtree_t ** _T);
@@ -92,4 +93,8 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
 
 size_t kdtree_query_closest(kdtree_t * T, double * X);
 
+void node_print_bbx(const kdtree_t * T, const kdtree_node_t * N);
+
+/* Run some self-tests */
+void kdtree_validate(kdtree_t * T);
 #endif

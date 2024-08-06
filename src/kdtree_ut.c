@@ -132,7 +132,9 @@ bool is_unique(const size_t * N, const int k)
     return true;
 }
 
-bool found_correct(double * X, size_t N, double * Q, size_t * knn, int k)
+bool found_correct(double * X,
+                   size_t N, double * Q,
+                   size_t * knn, int k)
 {
     // if the last two distances are unique
     // i.e., not duplicates we should find
@@ -163,8 +165,8 @@ bool found_correct(double * X, size_t N, double * Q, size_t * knn, int k)
     {
         return true;
     }
-    printf("Error: Found %d point(s) < %f, expected %d\n", nfound, r, k-1);
-    assert(nfound == k-1);
+    printf("ERROR: Found %d point(s) < %f, expected %d\n", nfound, r, k-1);
+    //assert(nfound == k-1);
 
     return false;
 }
@@ -172,7 +174,7 @@ bool found_correct(double * X, size_t N, double * Q, size_t * knn, int k)
 void threads(size_t N, int k, int binsize)
 {
     double * X = rand_points(N);
-    kdtree_t * T = kdtree_new(X, N, binsize);
+    kdtree_t * T = kdtree_new(X, N, 2, binsize);
     // Timing with 1, ... 8 threads
     for(int nthreads = 1; nthreads < 9; nthreads++)
     {
@@ -189,13 +191,49 @@ void threads(size_t N, int k, int binsize)
     return;
 }
 
+void basic_tests(size_t N, int k, int binsize)
+{
+    double * X = rand_points(N);
+
+
+
+    printf("Create and free a Tree\n");
+    kdtree_t * T = kdtree_new(X, N, 2, binsize);
+    if(T == NULL)
+    {
+        printf("Could not construct a kd-tree\n");
+        exit(EXIT_FAILURE);
+    }
+    kdtree_validate(T);
+
+    kdtree_free(&T);
+    printf("done\n");
+
+    free(X);
+
+}
+
+void print_query_and_result(const double * X,
+                       const double * Q,
+                       const size_t * idx,
+                       size_t k)
+{
+    printf("Query point: (%f, %f)\n", Q[0], Q[1]);
+    for(size_t kk = 0; kk< k; kk++)
+    {
+        printf("#%zu (%f, %f)\n", idx[kk],
+               Q[2*idx[kk]],Q[2*idx[kk]+1]);
+    }
+    return;
+}
+
 void benchmark(size_t N, int k, int binsize)
 {
     double * X = rand_points(N);
 
     struct timespec tstart, tend;
     clock_gettime(CLOCK_REALTIME, &tstart);
-    kdtree_t * T = kdtree_new(X, N, binsize);
+    kdtree_t * T = kdtree_new(X, N, 2, binsize);
     if(T == NULL)
     {
         printf("Could not construct a kd-tree\n");
@@ -209,9 +247,9 @@ void benchmark(size_t N, int k, int binsize)
         int next = 0;
         while(next >= 0)
         {
-            kdtree_node_t node = T->root[next];
-            printf("%d, %zu [%f, %f, %f, %f]\n", next, node.n_points,
-                   node.xmin, node.xmax, node.ymin, node.ymax);
+            kdtree_node_t node = T->nodes[next];
+            printf("%d, %zu ", next, node.n_points);
+            node_print_bbx(T, &node);
             next = node.node_right;
         }
     }
@@ -238,6 +276,8 @@ void benchmark(size_t N, int k, int binsize)
     printf("To find %d-NN for all %zu points took %f s\n", k, N, t_all_knn);
     printf("Total time: %f s\n", t_build_tree + t_all_knn);
 
+
+
     printf("-> Validation\n");
     for(size_t kk = 0; kk<N; kk++)
     {
@@ -248,22 +288,29 @@ void benchmark(size_t N, int k, int binsize)
         double * Q = X+2*kk;
         size_t * knn = kdtree_query_knn(T, Q, k);
         bool ok = is_radially_sorted(X, Q, knn, k);
+        bool all_ok = true;
         if(!ok)
         {
-            printf("ERROR: Resulting match not ordered radially\n");
-            exit(EXIT_FAILURE);
+            printf("\nERROR: Resulting match not ordered radially\n");
+            all_ok = false;
         }
 
         ok = is_unique(knn, k);
         if(!ok)
         {
-            printf("ERROR: Resulting match has duplicates\n");
-            exit(EXIT_FAILURE);
+            printf("\nERROR: Resulting match has duplicates\n");
+            all_ok = false;
         }
         ok = found_correct(X, N, Q, knn, k);
         if(!ok)
         {
-            printf("ERROR: Did not find the correct points\n");
+            printf("\nERROR: Did not find the correct points\n");
+            all_ok = false;
+        }
+        if(!all_ok)
+        {
+            print_query_and_result(X, Q, knn, k);
+
             exit(EXIT_FAILURE);
         }
     }
@@ -296,7 +343,15 @@ int main(int argc, char ** argv)
     }
     printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
 
-    threads(N, k, binsize);
+
+    basic_tests(N, k, binsize);
+
     benchmark(N, k, binsize);
+
+
+    threads(N, k, binsize);
+
+
+
     return EXIT_SUCCESS;
 }

@@ -4,6 +4,20 @@
 // Make a shallow copy of a kd-tree for usage by another thread.
 kdtree_t * kdtree_copy(kdtree_t * );
 
+void node_print_bbx(const kdtree_t * T, const kdtree_node_t * N)
+{
+
+    for(size_t kk = 0; kk < T->ndim; kk++)
+    {
+        printf("[%f -- %f]", N->bbx[2*kk], N->bbx[2*kk+1]);
+        if(kk + 1 < T->ndim)
+        {
+            printf("x");
+        }
+    }
+    printf("\n");
+    return;
+}
 
 void kdtree_free(kdtree_t ** _T)
 {
@@ -11,7 +25,7 @@ void kdtree_free(kdtree_t ** _T)
 
     free(T->idx_local);
     free(T->X_local);
-    free(T->root);
+    free(T->nodes);
     if(T->pq != NULL)
     {
         pqheap_free(&T->pq);
@@ -37,95 +51,80 @@ kdtree_t * kdtree_copy(kdtree_t * _T)
     return T;
 }
 
-static inline double eudist(const double * A, const double * B)
+/* Euclidean distance squared */
+static double eudist_sq(const double * A, const double * B, size_t ndim)
 {
-    return sqrt(pow(A[0]-B[0],2) + pow(A[1]-B[1], 2));
+    double sum = 0;
+    for(size_t ii = 0; ii<ndim; ii++)
+    {
+        sum+=pow(A[ii]-B[ii], 2);
+    }
+    return sum;
 }
 
-static inline double eudist2(const double * A, const double * B)
+
+static double eudist(const double * A, const double * B, size_t ndim)
 {
-    return pow(A[0]-B[0],2) + pow(A[1]-B[1], 2);
+    return sqrt(eudist_sq(A, B, ndim));
 }
 
-double get_median(const double * X, size_t N, double * T)
+
+double get_median_from_strided(const double * X, size_t N, double * T, size_t stride)
 {
     // T is a temporary buffer, should be N elements large
     // https://www.gnu.org/software/gsl/doc/html/statistics.html
     // quickselect
     for(size_t kk = 0; kk < N; kk++)
     {
-        T[kk] = X[2*kk];
+        T[kk] = X[stride*kk];
     }
     double median =  gsl_stats_median(T, 1, N);
     return median;
 }
 
 
-
-void get_min_max(const double * restrict X, const size_t N,
-                 double * restrict xa, double * restrict xb,
-                 double * restrict ya, double * restrict yb)
+void bounding_box(const double * restrict X,
+                  const size_t N, const size_t D,
+                  double * restrict bbx)
 {
-    double _xa = X[0];
-    double _xb = X[0];
-    double _ya = X[1];
-    double _yb = X[1];
-    for(size_t kk = 0; kk<N; kk++)
+    for(size_t dd = 0 ; dd < D; dd++)
     {
-        double x = X[2*kk];
-        if(x < _xa)
+        bbx[2*dd] = X[dd]; // Min along dimension dd
+        bbx[2*dd+1] = X[dd]; // Max along dimensions dd
+    }
+    for(size_t nn = 0; nn < N; nn++)
+    {
+        for(size_t dd = 0 ; dd < D; dd++)
         {
-            _xa = x;
-        }
-        if(x > _xb)
-        {
-            _xb = x;
-        }
-        double y = X[2*kk+1];
-        if(y < _ya)
-        {
-            _ya = y;
-        }
-        if(y > _yb)
-        {
-            _yb = y;
+            X[D*nn + dd] < bbx[2*dd] ? bbx[2*dd] = X[D*nn + dd] : 0;
+            X[D*nn + dd] > bbx[2*dd + 1] ? bbx[2*dd + 1] = X[D*nn + dd] : 0;
         }
     }
-    xa[0] = _xa;
-    xb[0] = _xb;
-    ya[0] = _ya;
-    yb[0] = _yb;
     return;
 }
 
-#if 0
-void node_shuffle(double * X, size_t * idx, size_t kk)
-{
-}
-#endif
 
-// Sort the elements in the final nodes radially ?
-// or unsort them?
+/* Recursive splitting  */
 void
-kdtree_split(kdtree_t * T,
-             double * X, size_t * idx, size_t n_points,
-             double xmin, double xmax, double ymin, double ymax)
+kdtree_split(kdtree_t * T, // Add kdtree_node_t * parent
+             const double * X, size_t * idx, size_t n_points)
 {
-    kdtree_node_t * node = T->root + T->next;
+    kdtree_node_t * node = T->nodes + T->next;
+    node->id = T->next;
+    T->next++;
 
-    node->number = T->next;
     node->n_points = n_points; // number of elements to split on
-    node->xmin = xmin;
-    node->xmax = xmax;
-    node->ymin = ymin;
-    node->ymax = ymax;
+
+    // This should be given by the parent
+    // No need to repeat all the time.
+    // only if parent == NULL
+    bounding_box(X, n_points, T->ndim, node->bbx);
 
     if(n_points < (size_t) T->binsize)
     {
     final: ; // Construct a "final" node without children
         node->node_left = -1;
         node->node_right = -1;
-
 
         node->X =  T->X_local + 2*T->next_idx;
         node->idx = T->idx_local + T->next_idx;
@@ -134,106 +133,143 @@ kdtree_split(kdtree_t * T,
         for(size_t kk = 0; kk < n_points; kk++)
         {
             node->idx[kk] = idx[kk];
-            node->X[2*kk] =     X[2*kk];
-            node->X[2*kk + 1] = X[2*kk + 1];
+            for(size_t ii = 0; ii < T->ndim; ii++)
+            {
+                node->X[T->ndim*kk + ii] =     X[T->ndim*kk+ii];
+            }
         }
         //node_shuffle(node->X, node->idx, kk);
 
         T->next_idx += n_points;
         return;
     }
-    //printf("%zu %zu points, [%f, %f, %f, %f]\n", next[0], N, xmin, xmax, ymin, ymax);
 
-    double dx = xmax-xmin;
-    assert(dx > 0);
-    double dy = ymax-ymin;
-    assert(dy > 0);
-    int var = 0; // variable to split on
-    if(dy > dx)
+    /* Decide along which dimension to split */
     {
-        var = 1;
-    }
-    node->var = var;
-
-    double pivot,
-        rxmin, rxmax, rymin, rymax,
-        lxmin, lxmax, lymin, lymax = 0;
-
-    if(var == 0)
-    {
-        pivot = get_median(X, n_points, T->median_buffer);
-        //pivot = xmin + 0.5*dx;
-        rxmin = pivot; rxmax = xmax; rymin = ymin; rymax = ymax;
-        lxmin = xmin; lxmax = pivot; lymin = ymin; lymax = ymax;
-        if(pivot == xmin || pivot == xmax)
-        { // Avoid infinite recursion
-            goto final;
-        }
-    } else {
-        //pivot = ymin + 0.5*dy;
-        pivot = get_median(X+1, n_points, T->median_buffer);
-        rxmin = xmin; rxmax = xmax; rymin = pivot; rymax = ymax;
-        lxmin = xmin; lxmax = xmax; lymin = ymin; lymax = pivot;
-        if(pivot == ymin || pivot == ymax)
+        size_t split_dim = 0; // dimension or variable to split on
+        double max_size = node->bbx[1] - node->bbx[0];
+        for(size_t dd = 0; dd < T->ndim; dd++)
         {
-            goto final;
+            double t = node->bbx[2*dd+1]-node->bbx[2*dd];
+            assert(t >= 0);
+            if(t > max_size)
+            {
+                split_dim = dd;
+                max_size = t;
+            }
+        }
+        node->split_dim = split_dim;
+    }
+
+
+    node->pivot =
+        get_median_from_strided(X+node->split_dim,
+                                n_points, T->median_buffer,
+                                T->ndim);
+
+    /* Avoid infinite recursion. Needed? */
+    if(node->pivot == node->bbx[2*node->split_dim]
+       || node->pivot == node->bbx[2*node->split_dim+1])
+    {
+        goto final;
+    }
+
+    size_t n_high = 0;
+    for(size_t kk = 0; kk < n_points; kk++)
+    {
+        if(X[T->ndim*kk+node->split_dim] > node->pivot)
+        {
+            n_high++;
         }
     }
-    node->pivot = pivot;
 
-    double * Xleft = malloc(2*n_points*sizeof(double));
-    size_t * idx_left = malloc(n_points*sizeof(double));
-    double * Xright = malloc(2*n_points*sizeof(double));
-    size_t * idx_right = malloc(n_points*sizeof(double));
+
+    // TODO: Looks like these use twice as much memory as needed together */
+    // Not needed at all. We split the list of coordinates (and idx)
+    // in the same way as we do with qsort
+
+    size_t n_left = n_points - n_high;
+    size_t n_right = n_high;
+    printf("n_left: %zu, n_right: %zu\n", n_left, n_right);
+    assert(n_left != 0);
+    assert(n_right != 0);
+    double * Xleft = malloc(T->ndim*n_left*sizeof(double));
+    size_t * idx_left = malloc(n_left*sizeof(double));
+
+    double * Xright = malloc(T->ndim*n_right*sizeof(double));
+    size_t * idx_right = malloc(n_right*sizeof(double));
 
     size_t rpos = 0;
     size_t lpos = 0;
     for(size_t kk = 0; kk < n_points; kk++)
     {
-        if(X[2*kk+var] > pivot)
-        {
-            Xright[2*rpos] = X[2*kk];
-            Xright[2*rpos+1] = X[2*kk+1];
+        if(X[T->ndim*kk + node->split_dim] > node->pivot)
+        { // Right=High=Above pivot
+            for(size_t ii = 0; ii < T->ndim; ii++)
+            {
+                Xright[T->ndim*rpos+ii] = X[T->ndim*kk+ii];
+            }
             idx_right[rpos] = idx[kk];
             rpos++;
         } else {
-            Xleft[2*lpos] = X[2*kk];
-            Xleft[2*lpos+1] = X[2*kk+1];
+            for(size_t ii = 0; ii < T->ndim; ii++)
+            {
+                Xleft[T->ndim*lpos+ii] = X[T->ndim*kk];
+            }
             idx_left[lpos] = idx[kk];
             lpos++;
         }
     }
+
     assert(lpos > 0); // if this is the case, this should be
     assert(rpos > 0); // made a final node (duplicate points...)
+    assert(lpos == n_left);
+    assert(rpos == n_right);
 
     assert(lpos+rpos == n_points);
-    T->next++;
-    node->node_right = T->next;;
-    kdtree_split(T, Xright, idx_right, rpos,
-                 rxmin, rxmax, rymin, rymax);
+
+    node->node_right = T->next;
+    kdtree_split(T, Xright, idx_right, rpos);
     free(Xright);
     free(idx_right);
 
-    T->next++;
+
     node->node_left = T->next;;
-    kdtree_split(T, Xleft, idx_left, lpos,
-                 lxmin, lxmax, lymin, lymax);
+    kdtree_split(T, Xleft, idx_left, lpos);
+
     free(Xleft);
     free(idx_left);
     return;
 }
 
 kdtree_t *
-kdtree_new(const double * X, size_t N, int binsize)
+kdtree_new(const double * X,
+           size_t N, size_t ndim,
+           int binsize)
 {
+    if(ndim < 2 || ndim > KDTREE_MAXDIM)
+    {
+        printf("kdtree_new: Invalid number of dimensions\n");
+        return NULL;
+    }
+    if(binsize < 1)
+    {
+        printf("kdtree_new: invalid bin size\n");
+        return NULL;
+    }
+
     /// Set up the tree
     kdtree_t * T = malloc(sizeof(kdtree_t));
+    T->ndim = ndim;
     T->k = -1; // not set up for queries of any size
-    kdtree_node_t * nodes = malloc(N*sizeof(kdtree_node_t));
-    T->root = nodes;
+    /* This use too much memory, we only need approximately
+     * N/binsize nodes. We could try 2*N/binsize and grow
+     * later on if needed */
+    T->nodes = malloc(N*sizeof(kdtree_node_t));
+
     T->n_nodes = 0;
     T->idx_local = malloc(N*sizeof(size_t));
-    T->X_local = malloc(2*N*sizeof(size_t));
+    T->X_local = malloc(T->ndim*N*sizeof(size_t));
     T->pq = NULL;
     T->KN = NULL;
 
@@ -248,18 +284,18 @@ kdtree_new(const double * X, size_t N, int binsize)
     }
 
     /// Set up the root node
-    double xmin, xmax, ymin, ymax = 0;
-    get_min_max(X, N, &xmin, &xmax, &ymin, &ymax);
+    //double bbx[KDTREE_MAXDIM*2] = {0};
+
     // Expand the region for correct ball-within-region checking
-    double dx = xmax-xmin;
-    double dy = ymax-ymin;
-    xmin -= 2*dx; xmax += 2*dx;
-    ymin -= 2*dy; ymax += 2*dy;
+    //double dx = xmax-xmin;
+    //double dy = ymax-ymin;
+    //xmin -= 2*dx; xmax += 2*dx;
+    //ymin -= 2*dy; ymax += 2*dy;
 
     T->median_buffer = malloc(N*sizeof(double));
 
     /* Recursive construction */
-    kdtree_split(T, X, idx_list, N, xmin, xmax, ymin, ymax);
+    kdtree_split(T, X, idx_list, N);
 
     free(T->median_buffer);
     T->median_buffer = NULL;
@@ -273,24 +309,24 @@ kdtree_new(const double * X, size_t N, int binsize)
 size_t kdtree_query_closest(kdtree_t * T, double * X)
 {
 
-    kdtree_node_t * N = T->root;
+    kdtree_node_t * N = T->nodes;
     while(N->node_left > 0)
     {
-        int var = N->var;
-        if(X[var] > N->pivot)
+        int split_dim = N->split_dim;
+        if(X[split_dim] > N->pivot)
         {
-            N = T->root+N->node_right;
+            N = T->nodes+N->node_right;
         } else {
-            N = T->root+N->node_left;
+            N = T->nodes+N->node_left;
         }
     }
     assert(N->node_left == -1);
     assert(N->node_left == -1);
-    double dmin = eudist(X, N->X);
+    double dmin = eudist(X, N->X, T->ndim);
     size_t imin = N->idx[0];
     for(size_t kk = 0; kk<N->n_points; kk++)
     {
-        double d = eudist(X, N->X + 2*kk);
+        double d = eudist(X, N->X + 2*kk, T->ndim);
         if(0){
         printf("%zu (%f, %f), %f\n", N->idx[kk],
                N->X[2*kk], N->X[2*kk+1], d);
@@ -312,8 +348,8 @@ int within_bounds(const kdtree_node_t * node, const double * Q, const double r)
     // else 0
     const double x = Q[0];
     const double y = Q[1];
-    if(x + r > node->xmax || x - r < node->xmin ||
-       y + r > node->ymax || y - r < node->ymin)
+    if(x + r > node->bbx[1] || x - r < node->bbx[0] ||
+       y + r > node->bbx[3] || y - r < node->bbx[2])
     {
         return 0;
     } else {
@@ -335,11 +371,7 @@ static inline double min(double a, double b)
 int bounds_overlap_ball(const kdtree_t * T, const kdtree_node_t * node, const double * Q)
 {
 
-#ifdef aq
-    double rmax = aq_get_max_value(aq);
-#else
     const double rmax = pqheap_get_max_value(T->pq);
-#endif
 
 
     // find nearest x and nearest y
@@ -347,20 +379,20 @@ int bounds_overlap_ball(const kdtree_t * T, const kdtree_node_t * node, const do
     double ny = 0;
     const double x = Q[0];
     const double y = Q[1];
-    if( x < node->xmin)
+    if( x < node->bbx[0])
     {
-        nx = node->xmin - x;
-    } else if (x > node->xmax)
+        nx = node->bbx[0] - x;
+    } else if (x > node->bbx[1])
     {
-        nx = x - node->xmax;
+        nx = x - node->bbx[1];
     }
 
-    if( y < node->ymin)
+    if( y < node->bbx[2])
     {
-        nx = node->ymin - y;
-    } else if (y > node->ymax)
+        nx = node->bbx[2] - y;
+    } else if (y > node->bbx[3])
     {
-        ny = y - node->ymax;
+        ny = y - node->bbx[3];
     }
 
     if(pow(nx, 2) + pow(ny, 2) < rmax)
@@ -379,15 +411,12 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
     // Return 0 else
     if(0)
     {
-    printf("Visiting node %6zu #=%7zu [% f, % f, % f, % f]\n", node->number, node->n_points,
-           node->xmin, node->xmax, node->ymin, node->ymax);
+        printf("Visiting node %6zu #=%7zu",
+               node->id, node->n_points);
+        node_print_bbx(T, node);
     }
 
-    #ifdef aq
-
-    #else
     pqheap_t * pq = T->pq;
-    #endif
 
     // If final node
     if(node->node_left == -1)
@@ -399,7 +428,7 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         // Add all points
         for(size_t kk = 0; kk<node->n_points; kk++)
         {
-            double d2 = eudist2(X+2*kk, Q);
+            double d2 = eudist_sq(X+2*kk, Q, T->ndim);
             //X += 2;
             //printf("Adding %f\n", sqrt(d2));
             //fprintf(T->log, "%f ", d2);
@@ -416,23 +445,23 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
 
     // Descend depending on pivot
     // First take the path that gets us closer to the query point
-    int var = node->var;
+    int split_dim = node->split_dim;
     int done = 0;
-    if(Q[var] > node->pivot)
+    if(Q[split_dim] > node->pivot)
     {
         // correct direction
-        if(T->direct_path || bounds_overlap_ball(T, T->root + node->node_right, Q))
+        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node->node_right, Q))
         {
-        done = kdtree_search(T, T->root + node->node_right, Q);
+        done = kdtree_search(T, T->nodes + node->node_right, Q);
         if(done == 1)
         {
             return done;
         }
         }
         // "wrong direction"
-        if(bounds_overlap_ball(T, T->root + node->node_left, Q))
+        if(bounds_overlap_ball(T, T->nodes + node->node_left, Q))
         {
-            done = kdtree_search(T, T->root + node->node_left, Q);
+            done = kdtree_search(T, T->nodes + node->node_left, Q);
             if(done == 1)
             {
                 return done;
@@ -440,9 +469,9 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         }
     } else {
         // "correct" direction
-        if(T->direct_path || bounds_overlap_ball(T, T->root + node->node_left, Q))
+        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node->node_left, Q))
         {
-        done = kdtree_search(T, T->root + node->node_left, Q);
+        done = kdtree_search(T, T->nodes + node->node_left, Q);
         if(done)
         {
             return 1;
@@ -450,9 +479,9 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         }
 
         // "wrong" direction
-        if(bounds_overlap_ball(T, T->root + node->node_right, Q))
+        if(bounds_overlap_ball(T, T->nodes + node->node_right, Q))
         {
-          done = kdtree_search(T, T->root + node->node_right, Q);
+          done = kdtree_search(T, T->nodes + node->node_right, Q);
         }
         if(done)
         {
@@ -503,7 +532,7 @@ size_t * kdtree_query_knn(kdtree_t * T, const double * Q, int k)
 
     // Traverse the tree
     T->direct_path = 1;
-    kdtree_search(T, T->root, Q);
+    kdtree_search(T, T->nodes, Q);
 
     // If we don't need an ordered answer we could just traverse
     // the pq and extract the elements as we go.
@@ -591,4 +620,17 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
     }
 
     return KNN;
+}
+
+void kdtree_validate(kdtree_t * T)
+{
+    // Check that all points are within bounds
+    for(size_t n = 0 ; n < T->n_nodes; n++)
+    {
+        kdtree_node_t * node = T->nodes + n;
+        printf("Node id: %zu (%d, %d)\n", n,
+               node->node_left, node->node_right);
+
+        node_print_bbx(T, node);
+    }
 }
