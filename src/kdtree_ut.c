@@ -235,6 +235,55 @@ void print_query_and_result(const double * X,
     return;
 }
 
+void test_query_radius(size_t N, double radius)
+{
+    printf("test_query_radius(N=%zu, r=%f)\n", N, radius);
+    double * X = rand_points(N);
+    kdtree_t * T = kdtree_new(X, N, DIM, 10);
+    size_t n = 0;
+
+    struct timespec tstart, tend;
+    clock_gettime(CLOCK_REALTIME, &tstart);
+    size_t * idx = kdtree_query_radius(T, X, radius, &n);
+    clock_gettime(CLOCK_REALTIME, &tend);
+    printf("Found %zu points in %f s\n", n, timespec_diff(&tend, &tstart));
+    size_t nshow = 10;
+    if(n < nshow)
+    {
+        nshow = n;
+    }
+    for(size_t kk = 0; kk < nshow; kk++)
+    {
+        double * p = X + 3*idx[kk];
+        printf("(%f, %f, %f), r = %f\n", p[0], p[1], p[1], eudist3(p, X));
+    }
+    if(nshow < n)
+    {
+        printf("Showed %zu / %zu points\n", nshow, n);
+    }
+    clock_gettime(CLOCK_REALTIME, &tstart);
+    size_t n_brute_force = 0;
+    for(size_t kk = 0 ; kk<N; kk++)
+    {
+        if( eudist3(X, X+3*kk) < radius)
+        {
+            n_brute_force++;
+        }
+    }
+    clock_gettime(CLOCK_REALTIME, &tend);
+    printf("Brute force found %zu points in %f s\n", n_brute_force, timespec_diff(&tend, &tstart));
+    if(n == n_brute_force)
+    {
+        printf("Agreement with brute force\n");
+    } else {
+        printf("Error: Brute force found %zu\n", n_brute_force);
+    }
+    kdtree_free(&T);
+    free(idx);
+    free(X);
+    return;
+}
+
 void benchmark(size_t N, int k, int binsize)
 {
     double * X = rand_points(N);
@@ -345,6 +394,8 @@ int main(int argc, char ** argv)
 
     basic_tests(N, binsize);
 
+    test_query_radius(N, 10);
+    test_query_radius(N, 100);
 
     benchmark(N, k, binsize);
 

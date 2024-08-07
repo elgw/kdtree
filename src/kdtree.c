@@ -261,7 +261,7 @@ kdtree_split(kdtree_t * T,
 
 
     /* Avoid infinite recursion.
-     This happens when points are flat in the splitting dimension */
+       This happens when points are flat in the splitting dimension */
     if(pivot == node->bbx[2*split_dim]
        || pivot == node->bbx[2*split_dim+1])
     {
@@ -333,9 +333,9 @@ kdtree_new(const double * X,
         return NULL;
     }
 
-    #ifndef NDEBUG
+#ifndef NDEBUG
     printf("kdtree warning: Not compiled with -DNDEBUG. Performance will be restrained. \n");
-    #endif
+#endif
 
     /* Set up the tree and the basic settings*/
     kdtree_t * T = calloc(1, sizeof(kdtree_t));
@@ -450,12 +450,10 @@ static inline double min(double a, double b)
     return b;
 }
 
-int bounds_overlap_ball(const kdtree_t * T, const kdtree_node_t * node, const double * Q)
+static int bounds_overlap_ball_raw(const double * bbx,
+                                   const double * Q,
+                                   const double r2)
 {
-
-    const double rmax = pqheap_get_max_value(T->pq);
-
-
     // find nearest x and nearest y
     double nx = 0;
     double ny = 0;
@@ -464,37 +462,47 @@ int bounds_overlap_ball(const kdtree_t * T, const kdtree_node_t * node, const do
     const double y = Q[1];
     const double z = Q[2];
 
-    if( x < node->bbx[0])
+    if( x < bbx[0])
     {
-        nx = node->bbx[0] - x;
-    } else if (x > node->bbx[1])
+        nx = bbx[0] - x;
+    } else if (x > bbx[1])
     {
-        nx = x - node->bbx[1];
+        nx = x - bbx[1];
     }
 
-    if( y < node->bbx[2])
+    if( y < bbx[2])
     {
-        nx = node->bbx[2] - y;
-    } else if (y > node->bbx[3])
+        nx = bbx[2] - y;
+    } else if (y > bbx[3])
     {
-        ny = y - node->bbx[3];
+        ny = y - bbx[3];
     }
 
-    if( z < node->bbx[4])
+    if( z < bbx[4])
     {
-        nz = node->bbx[4] - z;
-    } else if (z > node->bbx[5])
+        nz = bbx[4] - z;
+    } else if (z > bbx[5])
     {
-        nz = z - node->bbx[5];
+        nz = z - bbx[5];
     }
 
-    if(pow(nx, 2) + pow(ny, 2) + pow(nz, 2) < rmax)
+    if(pow(nx, 2) + pow(ny, 2) + pow(nz, 2) < r2)
     {
         return 1;
     }
 
     return 0;
 
+}
+
+static int
+bounds_overlap_ball(const kdtree_t * T,
+                    const kdtree_node_t * node,
+                    const double * Q)
+{
+
+    const double rmax = pqheap_get_max_value(T->pq);
+    return bounds_overlap_ball_raw(node->bbx, Q, rmax);
 }
 
 /* Recursive search until no more points can be found
@@ -540,10 +548,10 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
         if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q))
         {
             done = kdtree_search(T, T->nodes + node_right_child_id(node->id), Q);
-        if(done == 1)
-        {
-            return done;
-        }
+            if(done == 1)
+            {
+                return done;
+            }
         }
         // "wrong direction"
         if(bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
@@ -559,10 +567,10 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
         if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
         {
             done = kdtree_search(T, T->nodes + node_left_child_id(node->id), Q);
-        if(done)
-        {
-            return 1;
-        }
+            if(done)
+            {
+                return 1;
+            }
         }
 
         // "wrong" direction
@@ -645,7 +653,7 @@ size_t * kdtree_query_knn(kdtree_t * T, const double * Q, size_t k)
 typedef struct{
     kdtree_t * T;
     const double * Q;
-     size_t nQ;
+    size_t nQ;
     int k;
     int thread;
     int nthreads;
@@ -747,7 +755,7 @@ void kdtree_validate(kdtree_t * T)
                         assert(XID[pp*XID_STRIDE + dd] >= node->bbx[2*dd]);
                         assert(XID[pp*XID_STRIDE + dd] <= node->bbx[2*dd+1]);
                     }
-            }
+                }
             }
         }
     }
@@ -762,7 +770,7 @@ struct darray {
 
 static void darray_n_more(struct darray * A, size_t nmore)
 {
-    if(A->n_found + nmore >= n_alloc)
+    if(A->n_found + nmore >= A->n_alloc)
     {
         size_t new_size = A->n_alloc + nmore;
         if(new_size < 1.2 *A->n_alloc)
@@ -778,10 +786,16 @@ static void darray_n_more(struct darray * A, size_t nmore)
 static void _kdtree_query_radius(const kdtree_t * T,
                                  const double * Q,
                                  size_t node_id,
+                                 const double r,
                                  const double r2,
                                  struct darray * res)
 {
     kdtree_node_t * node = T->nodes + node_id;
+    if( ! bounds_overlap_ball_raw(node->bbx, Q, r2) )
+    {
+        return;
+    }
+
     /* If we reached a leaf see what points match the criteria */
     if(node_is_final(node))
     {
@@ -801,6 +815,17 @@ static void _kdtree_query_radius(const kdtree_t * T,
     /* If not in a leaf, we see what children it makes sense to traverse */
     // Some linear algebra: If Q + (mid-Q)/||mid-Q||*r crosses any of the 6 faces
     // we need to check. Simpler way to determine ?
+    // if (x_intersect) if (y_intersect) if (z_intersect) then traverse ...
+
+    _kdtree_query_radius(T, Q,
+                         node_left_child_id(node_id),
+                         r, r2, res);
+
+    _kdtree_query_radius(T, Q,
+                         node_right_child_id(node_id),
+                         r, r2, res);
+
+    return;
 }
 
 size_t *
@@ -809,11 +834,11 @@ kdtree_query_radius(const kdtree_t * T,
                     const double radius,
                     size_t * nfound)
 {
-    struct darray * res = calloc(1, sizeof(darray));
+    struct darray * res = calloc(1, sizeof(struct darray));
     res->n_alloc = 100;
     res->data = calloc(res->n_alloc, sizeof(size_t));
 
-    _kdtree_query_radius(T, Q, 0, pow(radius, 2), res);
+    _kdtree_query_radius(T, Q, 0, radius, pow(radius, 2), res);
 
 
     size_t * result = res->data;
