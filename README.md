@@ -12,7 +12,7 @@ within some distance in point clouds.
 /* X: N 3D points [3 x N] */
 kdtree_t * T = kdtree_new(X, N, 20);
 
-/* Find the k nearest neighbours to Q [1 x 3] */
+/* Find the k nearest neighbours to Q [3 x 1] */
 size_t * knn = kdtree_query_knn(T, Q, k);
 
 /* Find any point within a distance of radius to */
@@ -46,3 +46,5 @@ Supported operations:
 ## Maybe
 - [Implicit](https://en.wikipedia.org/wiki/Implicit_k-d_tree)
 - Option to pass a list of pointers instead of just returning indexes (when I need it).
+
+- [ ] write some test image [https://github.com/skeeto/bmp/blob/master/test.c]
