@@ -21,7 +21,7 @@ double * rand_points(size_t N)
 
 static double eudist3(const double * A, const double * B)
 {
-    return pow(A[0]-B[0],2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
+    return sqrt(pow(A[0]-B[0],2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2));
 }
 
 static double timespec_diff(struct timespec* end, struct timespec * start)
@@ -311,6 +311,7 @@ void benchmark(size_t N, int k, int binsize)
         {
             print_query_and_result(X, Q, knn, k);
 
+            printf("\n\nReturning\n\n");
             exit(EXIT_FAILURE);
         }
     }
@@ -346,8 +347,6 @@ int main(int argc, char ** argv)
 
     basic_tests(N, k, binsize);
 
-
-    return EXIT_SUCCESS;
 
     benchmark(N, k, binsize);
 

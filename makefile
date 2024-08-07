@@ -12,11 +12,13 @@ CFLAGS+=-O3
 LDFLAGS+=-flto
 endif
 
+kdtree_ut: src/kdtree.c makefile src/kdtree_ut.c src/pqheap.c
+	$(CC) $(CFLAGS) src/kdtree.c src/kdtree_ut.c src/pqheap.c $(LDFLAGS) -o kdtree_ut
+
+
 kdtree: src/kdtree.c include/kdtree.h makefile
 	$(CC) $(CFLAGS) -c src/kdtree.c $(LDFLAGS)
 
-kdtree_ut: src/kdtree.c makefile src/kdtree_ut.c src/pqheap.c
-	$(CC) $(CFLAGS) src/kdtree.c src/kdtree_ut.c src/pqheap.c $(LDFLAGS) -o kdtree_ut
 
 median5_ut: src/median5.c src/median5_ut.c
 	$(CC) $(CFLAGS) src/median5.c src/median5_ut.c $(LDFLAGS) -o median5
