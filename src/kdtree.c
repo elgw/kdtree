@@ -1,12 +1,45 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <string.h>
+#include <stdint.h>
+#include <math.h>
+#include <gsl/gsl_statistics_double.h>
+
+#include <pthread.h>
+
 #include "../include/kdtree.h"
 #include "pqheap.h"
-#include <string.h>
+
 
 #define XID_STRIDE (KDTREE_DIM + 1)
 
 // Make a shallow copy of a kd-tree for usage by another thread.
-kdtree_t * kdtree_copy(kdtree_t * );
+static kdtree_t * kdtree_copy_shallow(kdtree_t * );
 
+/* Resolve the index of the right child based on the index of the
+ * parent, following a Eytzinger scheme */
+static size_t node_right_child_id(size_t node_id)
+{
+    return 2*node_id+2;
+}
+
+static size_t node_left_child_id(size_t node_id)
+{
+    return 2*node_id+1;
+}
+
+
+static void node_set_final(kdtree_node_t * node)
+{
+    node->split_dim = KDTREE_DIM;
+    return;
+}
+
+static int node_is_final(const kdtree_node_t * node)
+{
+    return (node->split_dim == KDTREE_DIM);
+}
 
 /*  Hoare's partition scheme
     Adopted from arch/24/03/11_quickselect */
@@ -82,22 +115,18 @@ node_print_bbx(const kdtree_node_t * N)
 void kdtree_free(kdtree_t ** _T)
 {
     kdtree_t * T = _T[0];
-
     free(T->XID);
     free(T->nodes);
     if(T->pq != NULL)
     {
         pqheap_free(&T->pq);
     }
-    if(T->KN != NULL)
-    {
-        free(T->KN);
-    }
+    free(T->result);
     free(T);
     _T[0] = NULL;
 }
 
-kdtree_t * kdtree_copy(kdtree_t * _T)
+static kdtree_t * kdtree_copy_shallow(kdtree_t * _T)
 {
     assert(_T != NULL);
     if(_T == NULL)
@@ -105,10 +134,18 @@ kdtree_t * kdtree_copy(kdtree_t * _T)
     kdtree_t * T = calloc(1, sizeof(kdtree_t));
     assert(T != NULL);
     memcpy(T, _T, sizeof(kdtree_t));
-    T->k = -1;
+    T->result = NULL;
+    T->result_alloc = 0;
     T->pq = NULL;
-    T->KN = NULL;
     return T;
+}
+
+static void kdtree_free_shallow(kdtree_t * T)
+{
+    pqheap_free(&T->pq);
+    free(T->result);
+    free(T);
+    return;
 }
 
 /* Euclidean distance squared */
@@ -188,8 +225,7 @@ kdtree_split(kdtree_t * T,
     if(node->n_points < (size_t) T->max_leaf_size)
     {
     final: ; // Construct a "final" node without children
-        node->node_left = -1;
-        node->node_right = -1;
+        node_set_final(node);
         return;
     }
 
@@ -241,8 +277,8 @@ kdtree_split(kdtree_t * T,
     partition(XID, node->n_points, split_dim, pivot, &nLow, &nHigh);
 
     {
-        size_t left_id = 2*node_id+1; /* according to Etyzinger / Binary tree */
-        node->node_left = left_id;
+        size_t left_id = node_left_child_id(node_id);
+
         assert(left_id < T->n_nodes_alloc);
         kdtree_node_t * node_left = T->nodes+left_id;
         assert(node_left->id == 0);
@@ -255,9 +291,9 @@ kdtree_split(kdtree_t * T,
 
         kdtree_split(T, left_id);
     }
+
     {
-        size_t right_id = 2*node_id+2;
-        node->node_right = right_id;
+        size_t right_id = node_right_child_id(node_id);
         assert(right_id < T->n_nodes_alloc);
         kdtree_node_t * node_right = T->nodes+right_id;
         assert(node_right->id == 0); /* Unused? */
@@ -305,7 +341,6 @@ kdtree_new(const double * X,
     kdtree_t * T = calloc(1, sizeof(kdtree_t));
     assert( T!= NULL);
     T->max_leaf_size = max_leaf_size;
-    T->k = -1; // not set up for queries of any size
     T->n_points = N;
 
     /* Allocate storage for the nodes */
@@ -359,18 +394,17 @@ size_t kdtree_query_closest(kdtree_t * T, double * X)
 {
 
     kdtree_node_t * N = T->nodes;
-    while(N->node_left > 0)
+    while( ! node_is_final(N) )
     {
         int split_dim = N->split_dim;
         if(X[split_dim] > N->pivot)
         {
-            N = T->nodes+N->node_right;
+            N = T->nodes + node_right_child_id(N->id);
         } else {
-            N = T->nodes+N->node_left;
+            N = T->nodes+ + node_left_child_id(N->id);
         }
     }
-    assert(N->node_left == -1);
-    assert(N->node_left == -1);
+
     double * NX = T->XID + N->data_idx;
     double dmin = eudist(X, NX);
     size_t imin = NX[KDTREE_DIM]; // N->idx[0];
@@ -463,22 +497,16 @@ int bounds_overlap_ball(const kdtree_t * T, const kdtree_node_t * node, const do
 
 }
 
-int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
-{
-    /* Recursive search until no more points can be found */
-    // Return 1 if we are done
-    // Return 0 else
-    if(0)
-    {
-        printf("Visiting node %6zu #=%7zu",
-               node->id, node->n_points);
-        node_print_bbx(node);
-    }
+/* Recursive search until no more points can be found
+   Return 1 if we are done
+   Return 0 else
+*/
 
+static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
+{
     pqheap_t * pq = T->pq;
 
-    // If final node
-    if(node->node_left == -1)
+    if(node_is_final(node))
     {
         T->direct_path = 0;
         const double * NX = T->XID + node->data_idx;
@@ -509,18 +537,18 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
     if(Q[split_dim] > node->pivot)
     {
         // correct direction
-        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node->node_right, Q))
+        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q))
         {
-        done = kdtree_search(T, T->nodes + node->node_right, Q);
+            done = kdtree_search(T, T->nodes + node_right_child_id(node->id), Q);
         if(done == 1)
         {
             return done;
         }
         }
         // "wrong direction"
-        if(bounds_overlap_ball(T, T->nodes + node->node_left, Q))
+        if(bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
         {
-            done = kdtree_search(T, T->nodes + node->node_left, Q);
+            done = kdtree_search(T, T->nodes + node_left_child_id(node->id), Q);
             if(done == 1)
             {
                 return done;
@@ -528,9 +556,9 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         }
     } else {
         // "correct" direction
-        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node->node_left, Q))
+        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
         {
-        done = kdtree_search(T, T->nodes + node->node_left, Q);
+            done = kdtree_search(T, T->nodes + node_left_child_id(node->id), Q);
         if(done)
         {
             return 1;
@@ -538,9 +566,9 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         }
 
         // "wrong" direction
-        if(bounds_overlap_ball(T, T->nodes + node->node_right, Q))
+        if(bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q))
         {
-          done = kdtree_search(T, T->nodes + node->node_right, Q);
+            done = kdtree_search(T, T->nodes + node_right_child_id(node->id), Q);
         }
         if(done)
         {
@@ -559,19 +587,23 @@ int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
     return 0;
 }
 
-size_t * kdtree_query_knn(kdtree_t * T, const double * Q, int k)
+size_t * kdtree_query_knn(kdtree_t * T, const double * Q, size_t k)
 {
     //    printf("-> Q = (%f, %f)\n", Q[0], Q[1]);
 
     // If k changed from the last query, update:
-    if(k != T->k)
+    if(T->result_alloc != k)
     {
-        free(T->pq);
+        if(T->pq != NULL)
+        {
+            pqheap_free(&T->pq);
+        }
         T->pq = NULL;
-        free(T->KN);
-        T->KN = NULL;
+        free(T->result);
+        T->result = NULL;
+        T->result_alloc = 0;
     }
-    T->k = k;
+
 
     // Set up priority queue
     if(T->pq == NULL)
@@ -583,10 +615,10 @@ size_t * kdtree_query_knn(kdtree_t * T, const double * Q, int k)
     pqheap_insert(pq, 1e99, 0);
 
 
-    if(T->KN == NULL)
+    if(T->result == NULL)
     {
-        T->KN = calloc(k, sizeof(size_t));
-        assert(T->KN != NULL);
+        T->result = calloc(k, sizeof(size_t));
+        assert(T->result != NULL);
     }
 
 
@@ -597,16 +629,16 @@ size_t * kdtree_query_knn(kdtree_t * T, const double * Q, int k)
     // If we don't need an ordered answer we could just traverse
     // the pq and extract the elements as we go.
 
-    for(int kk = 0; kk<k; kk++)
+    for(size_t kk = 0; kk<k; kk++)
     {
         double val = 0;
         uint64_t idx = 0;
         pqheap_pop(pq, &val, &idx);
         //printf("Popped: %lu, d = %f\n", idx, val);
-        T->KN[k-kk-1] = idx;
+        T->result[k-kk-1] = idx;
     }
 
-    return T->KN;
+    return T->result;
 }
 
 // Struct for parallel queries
@@ -660,7 +692,7 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
 
         for(int kk = 0; kk<nthreads; kk++)
         {
-            confs[kk].T = kdtree_copy(T);
+            confs[kk].T = kdtree_copy_shallow(T);
             confs[kk].thread = kk;
             confs[kk].nthreads = nthreads;
             confs[kk].KNN = KNN;
@@ -673,10 +705,7 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
         for(int kk = 0; kk<nthreads; kk++)
         {
             pthread_join(threads[kk], NULL);
-            // TODO: free some stuff in T
-            pqheap_free(&confs[kk].T->pq);
-            free(confs[kk].T->KN);
-            free(confs[kk].T);
+            kdtree_free_shallow(confs[kk].T);
         }
         free(confs);
         free(threads);
@@ -708,7 +737,7 @@ void kdtree_validate(kdtree_t * T)
             //node_print_bbx(node);
 
             double * XID = T->XID + node->data_idx;
-            if(node->node_left == -1)
+            if(node_is_final(node))
             {
                 //print_XID(XID, node->n_points);
                 for(size_t pp = 0 ; pp < node->n_points; pp++)
@@ -723,4 +752,72 @@ void kdtree_validate(kdtree_t * T)
         }
     }
     printf("done\n");
+}
+
+struct darray {
+    size_t * data;
+    size_t n_found;
+    size_t n_alloc;
+};
+
+static void darray_n_more(struct darray * A, size_t nmore)
+{
+    if(A->n_found + nmore >= n_alloc)
+    {
+        size_t new_size = A->n_alloc + nmore;
+        if(new_size < 1.2 *A->n_alloc)
+        {
+            new_size = 1.2*A->n_alloc;
+        }
+        A->data = realloc(A->data, new_size*sizeof(size_t));
+        assert(A->data != NULL);
+        A->n_alloc = new_size;
+    }
+}
+
+static void _kdtree_query_radius(const kdtree_t * T,
+                                 const double * Q,
+                                 size_t node_id,
+                                 const double r2,
+                                 struct darray * res)
+{
+    kdtree_node_t * node = T->nodes + node_id;
+    /* If we reached a leaf see what points match the criteria */
+    if(node_is_final(node))
+    {
+        double * X = T->XID + node->data_idx;
+        size_t * ID = (size_t * ) T->XID + node->data_idx;
+        darray_n_more(res, node->n_points);
+        for(size_t kk = 0; kk < node->n_points; kk++)
+        {
+            if(eudist_sq(X + kk*XID_STRIDE, Q) < r2)
+            {
+                res->data[res->n_found] = ID[kk*XID_STRIDE + KDTREE_DIM];
+                res->n_found++;
+            }
+        }
+        return;
+    }
+    /* If not in a leaf, we see what children it makes sense to traverse */
+    // Some linear algebra: If Q + (mid-Q)/||mid-Q||*r crosses any of the 6 faces
+    // we need to check. Simpler way to determine ?
+}
+
+size_t *
+kdtree_query_radius(const kdtree_t * T,
+                    const double * Q,
+                    const double radius,
+                    size_t * nfound)
+{
+    struct darray * res = calloc(1, sizeof(darray));
+    res->n_alloc = 100;
+    res->data = calloc(res->n_alloc, sizeof(size_t));
+
+    _kdtree_query_radius(T, Q, 0, pow(radius, 2), res);
+
+
+    size_t * result = res->data;
+    *nfound = res->n_found;
+    free(res);
+    return result;
 }

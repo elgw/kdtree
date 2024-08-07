@@ -17,7 +17,7 @@ ifeq ($(FANALYZER),1)
 CFLAGS+=-fanalyzer
 endif
 
-kdtree_ut: src/kdtree.c makefile src/kdtree_ut.c src/pqheap.c
+kdtree_ut: src/kdtree.c makefile src/kdtree_ut.c src/pqheap.c include/kdtree.h
 	$(CC) $(CFLAGS) src/kdtree.c src/kdtree_ut.c src/pqheap.c $(LDFLAGS) -o kdtree_ut
 
 

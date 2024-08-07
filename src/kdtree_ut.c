@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <math.h>
+#include <string.h>
 
 #include "../include/kdtree.h"
 #include "pqheap.h"
@@ -250,16 +251,6 @@ void benchmark(size_t N, int k, int binsize)
     double t_build_tree = timespec_diff(&tend, &tstart);
     printf("To build the kd-tree took %f s\n", t_build_tree);
 
-    if(0){
-        int next = 0;
-        while(next >= 0)
-        {
-            kdtree_node_t node = T->nodes[next];
-            printf("%d, %zu ", next, node.n_points);
-            node_print_bbx(&node);
-            next = node.node_right;
-        }
-    }
 
     clock_gettime(CLOCK_REALTIME, &tstart);
     printf("-> %d-NN, all vs all\n", k);
