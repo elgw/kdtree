@@ -1,8 +1,61 @@
 #include "../include/kdtree.h"
 #include "pqheap.h"
+#include <string.h>
 
 // Make a shallow copy of a kd-tree for usage by another thread.
 kdtree_t * kdtree_copy(kdtree_t * );
+
+/*  Hoare's partition scheme
+    Adopted from arch/24/03/11_quickselect */
+static void
+partition(double * restrict X,
+          const size_t n, /* Number of points */
+          const size_t vdim, /* Dimension to take value from */
+          const double pivot,
+          size_t * nLow, size_t * nHigh)
+{
+    int64_t low = -1;
+    int64_t high = n;
+    int64_t n2 = n;
+
+    while(1)
+    {
+        do { low++; } while ( X[(KDTREE_DIM+1)*low+vdim] <= pivot && low < n2 );
+
+        do { high--; } while ( X[high*(KDTREE_DIM+1)+vdim] > pivot && high > 0);
+
+        if(low >= high)
+        { *nLow = low;  *nHigh = n-*nLow;
+#ifndef NDEBUG
+            assert(*nLow + *nHigh == n );
+            for(int64_t kk = 0; kk < low; kk++)
+            {
+                assert(X[kk] <= pivot);
+            }
+            for(int64_t kk = low; kk < n2; kk++)
+            {
+                assert(X[kk] > pivot);
+            }
+#endif
+            return;
+        }
+
+        /* Swap data */
+        double t[KDTREE_DIM];
+        memcpy(t,
+               X + low*(KDTREE_DIM+1),
+               (KDTREE_DIM+1)*sizeof(double));
+        memcpy(X + low*(KDTREE_DIM+1),
+               X + high*(KDTREE_DIM+1),
+               (KDTREE_DIM+1)*sizeof(double));
+        memcpy(X + high*(KDTREE_DIM+1),
+               t,
+               (KDTREE_DIM+1)*sizeof(double));
+    }
+
+    return;
+}
+
 
 void node_print_bbx(const kdtree_t * T, const kdtree_node_t * N)
 {
@@ -106,47 +159,25 @@ void bounding_box(const double * restrict X,
 
 /* Recursive splitting  */
 void
-kdtree_split(kdtree_t * T, // Add kdtree_node_t * parent
-             const double * X, size_t * idx, size_t n_points)
+kdtree_split(kdtree_t * T,
+             size_t node_id)
 {
-    kdtree_node_t * node = T->nodes + T->next;
-    node->id = T->next;
-    T->next++;
-
+    kdtree_node_t * node = T->nodes + node_id;
+    node->data_idx = data_idx;
     node->n_points = n_points; // number of elements to split on
 
-    // This should be given by the parent
-    // No need to repeat all the time.
-    // only if parent == NULL
-    bounding_box(X, n_points, T->ndim, node->bbx);
 
     if(n_points < (size_t) T->binsize)
     {
     final: ; // Construct a "final" node without children
         node->node_left = -1;
         node->node_right = -1;
-
-        node->X =  T->X_local + 2*T->next_idx;
-        node->idx = T->idx_local + T->next_idx;
-        //printf("T->next_idx = %zu, idx[0]=%zu\n", T->next_idx, idx[0]);
-        //getchar();
-        for(size_t kk = 0; kk < n_points; kk++)
-        {
-            node->idx[kk] = idx[kk];
-            for(size_t ii = 0; ii < T->ndim; ii++)
-            {
-                node->X[T->ndim*kk + ii] =     X[T->ndim*kk+ii];
-            }
-        }
-        //node_shuffle(node->X, node->idx, kk);
-
-        T->next_idx += n_points;
         return;
     }
 
     /* Decide along which dimension to split */
+    size_t split_dim = 0; // dimension or variable to split on
     {
-        size_t split_dim = 0; // dimension or variable to split on
         double max_size = node->bbx[1] - node->bbx[0];
         for(size_t dd = 0; dd < T->ndim; dd++)
         {
@@ -158,87 +189,52 @@ kdtree_split(kdtree_t * T, // Add kdtree_node_t * parent
                 max_size = t;
             }
         }
-        node->split_dim = split_dim;
     }
 
 
-    node->pivot =
-        get_median_from_strided(X+node->split_dim,
-                                n_points, T->median_buffer,
-                                T->ndim);
+    double * X = T->X + KDTREE_DIM*node->data_idx;
+    double pivot =
+        get_median_from_strided(X+split_dim,
+                                node->n_points, T->median_buffer,
+                                KDTREE_DIM);
 
-    /* Avoid infinite recursion. Needed? */
-    if(node->pivot == node->bbx[2*node->split_dim]
-       || node->pivot == node->bbx[2*node->split_dim+1])
+    /* Avoid infinite recursion.
+     This happens when points are flat in the splitting dimension */
+    if(pivot == node->bbx[2*split_dim]
+       || pivot == node->bbx[2*split_dim+1])
     {
         goto final;
     }
 
-    size_t n_high = 0;
-    for(size_t kk = 0; kk < n_points; kk++)
+    /* Partition the data  */
+    size_t nLow = 0;
+    size_t nHigh = 0;
+    partition(X, node->n_points, split_dim, pivot, &nLow, &nHigh);
+
+
     {
-        if(X[T->ndim*kk+node->split_dim] > node->pivot)
-        {
-            n_high++;
-        }
+        size_t left_id = 2*node_id+1; /* according to Etyzinger / Binary tree */
+        kdtree_node_t * node_left = T->nodes+left_id;
+        assert(node_left->id == 0);
+        node_left->id = left_id;
+        memcpy(node_left->bbx, node->bbx, 2*KDTREE_DIM);
+        node_left->bbx[2*split_dim + 1] = pivot;
+        node_left->n_points = nLow;
+        node_left->data_idx = node->data_idx;
+        kdtree_split(T, left_id);
+    }
+    {
+        size_t right_id = 2*node_id+2;
+        kdtree_node_t * node_right = T->nodes+right_id;
+        node_right->id = right_id;
+        assert(node_right->id == 0);
+        memcpy(node_right->bbx, node->bbx, 2*KDTREE_DIM);
+        node_right->bbx[2*split_dim] = pivot;
+        node_right->n_points = nHigh;
+        node_right->data_idx = node->data_idx + nLow;
+        kdtree_split(T, right_id);
     }
 
-
-    // TODO: Looks like these use twice as much memory as needed together */
-    // Not needed at all. We split the list of coordinates (and idx)
-    // in the same way as we do with qsort
-
-    size_t n_left = n_points - n_high;
-    size_t n_right = n_high;
-    printf("n_left: %zu, n_right: %zu\n", n_left, n_right);
-    assert(n_left != 0);
-    assert(n_right != 0);
-    double * Xleft = malloc(T->ndim*n_left*sizeof(double));
-    size_t * idx_left = malloc(n_left*sizeof(double));
-
-    double * Xright = malloc(T->ndim*n_right*sizeof(double));
-    size_t * idx_right = malloc(n_right*sizeof(double));
-
-    size_t rpos = 0;
-    size_t lpos = 0;
-    for(size_t kk = 0; kk < n_points; kk++)
-    {
-        if(X[T->ndim*kk + node->split_dim] > node->pivot)
-        { // Right=High=Above pivot
-            for(size_t ii = 0; ii < T->ndim; ii++)
-            {
-                Xright[T->ndim*rpos+ii] = X[T->ndim*kk+ii];
-            }
-            idx_right[rpos] = idx[kk];
-            rpos++;
-        } else {
-            for(size_t ii = 0; ii < T->ndim; ii++)
-            {
-                Xleft[T->ndim*lpos+ii] = X[T->ndim*kk];
-            }
-            idx_left[lpos] = idx[kk];
-            lpos++;
-        }
-    }
-
-    assert(lpos > 0); // if this is the case, this should be
-    assert(rpos > 0); // made a final node (duplicate points...)
-    assert(lpos == n_left);
-    assert(rpos == n_right);
-
-    assert(lpos+rpos == n_points);
-
-    node->node_right = T->next;
-    kdtree_split(T, Xright, idx_right, rpos);
-    free(Xright);
-    free(idx_right);
-
-
-    node->node_left = T->next;;
-    kdtree_split(T, Xleft, idx_left, lpos);
-
-    free(Xleft);
-    free(idx_left);
     return;
 }
 
@@ -247,44 +243,41 @@ kdtree_new(const double * X,
            size_t N, size_t ndim,
            int binsize)
 {
-    if(ndim < 2 || ndim > KDTREE_MAXDIM)
+    if(ndim !=  KDTREE_DIM)
     {
         printf("kdtree_new: Invalid number of dimensions\n");
         return NULL;
     }
+
     if(binsize < 1)
     {
         printf("kdtree_new: invalid bin size\n");
         return NULL;
     }
 
-    /// Set up the tree
-    kdtree_t * T = malloc(sizeof(kdtree_t));
-    T->ndim = ndim;
+    /* Set up the tree and the basic settings*/
+    kdtree_t * T = calloc(1, sizeof(kdtree_t));
+    assert( T!= NULL);
+    T->binsize = binsize;
     T->k = -1; // not set up for queries of any size
+
+
+    /* Allocate storage for the nodes */
     /* This use too much memory, we only need approximately
      * N/binsize nodes. We could try 2*N/binsize and grow
      * later on if needed */
-    T->nodes = malloc(N*sizeof(kdtree_node_t));
+    T->nodes = calloc(N, sizeof(kdtree_node_t));
 
-    T->n_nodes = 0;
-    T->idx_local = malloc(N*sizeof(size_t));
-    T->X_local = malloc(T->ndim*N*sizeof(size_t));
-    T->pq = NULL;
-    T->KN = NULL;
-
-    T->next = 0; // next node to write to
-    T->next_idx = 0; // next idx_local to write to
-    T->binsize = binsize;
-
-    size_t * idx_list = malloc(N*sizeof(size_t));
+    /* Copy the data points and attach an index */
+    T->XID = malloc((KDTREE_DIM+1)*N*sizeof(double));
     for(size_t kk = 0; kk<N; kk++)
     {
-        idx_list[kk] = kk;
+        memcpy(T->XID+kk*(KDTREE_DIM+1),
+               X+kk*(KDTREE_DIM),
+               KDTREE_DIM*sizeof(double));
+        size_t * ID = (size_t *) T->XID + (KDTREE_DIM+1)*kk + KDTREE_DIM;
+        *ID = kk;
     }
-
-    /// Set up the root node
-    //double bbx[KDTREE_MAXDIM*2] = {0};
 
     // Expand the region for correct ball-within-region checking
     //double dx = xmax-xmin;
@@ -292,16 +285,20 @@ kdtree_new(const double * X,
     //xmin -= 2*dx; xmax += 2*dx;
     //ymin -= 2*dy; ymax += 2*dy;
 
-    T->median_buffer = malloc(N*sizeof(double));
+    T->median_buffer = calloc(N, sizeof(double));
+
+    kdtree_node_t * node = T->nodes;
+    bounding_box(X, N, KDTREE_DIM, node->bbx);
+    node->n_points = N;
+    node->data_idx = 0;
 
     /* Recursive construction */
-    kdtree_split(T, X, idx_list, N);
+    kdtree_split(T, // Tree
+                 0); // node_id (location in array)
 
     free(T->median_buffer);
     T->median_buffer = NULL;
     T->n_nodes = T->next;
-    /* TODO: did we allocate more than needed? */
-    free(idx_list);
 
     return T;
 }

@@ -11,25 +11,34 @@
 
 #include <pthread.h>
 
-#define KDTREE_MAXDIM 4
+#define KDTREE_DIM 3
 
 struct pqheap;
+
+/**
+typedef struct {
+    size_t n_points; // A leaf if > 0
+    size_t data_idx; // Where the data is in X and IDX
+    double bbx[]; // C11 flexible array member
+} new_kdtree_node_t;
+
+node_size = 16 + 16*ndim;
+void * nodes = malloc(n_nodes_max*node_size);
+
+kdtree_node_t * node7 = (kdtree_node_t *) nodes + 7*node_size;
+
+**/
 
 typedef struct {
     size_t id; // number; // node number
     size_t n_points; // number of points
-    double bbx[2*KDTREE_MAXDIM];
-    int split_dim; // var // TODO: not needed
-    double pivot; // TODO not needed
-    int node_left; // children
+    double bbx[2*KDTREE_DIM];
+    int node_left; // children TODO not needed
     int node_right;
-    size_t * idx; // Pointer to the local idx
-    double * X; // Pointer to the local coordinates
-
+    size_t data_idx; // Where in X and in idx that the data can be found
 } kdtree_node_t;
 
 typedef struct{
-    size_t ndim; // Number of dimensions
     size_t binsize;
 
     /* Node allocation  */
@@ -37,13 +46,10 @@ typedef struct{
     size_t n_nodes; // Total number of nodes
     size_t next; // What node to write to during construction
 
+    /* We will store (x, y, z), id in the same array */
+    double * XID;
+    assert(sizeof(double) == sizeof(size_t));
 
-    size_t * idx_local; // For node idx storage // TODO remove
-    double * X_local; // For node coordinate storage // TODO remove
-    size_t next_idx; // Where to start writing idx
-
-
-    double * X; // pointer to supplied data
     size_t N; // Number of supplied points
 
     int direct_path;
