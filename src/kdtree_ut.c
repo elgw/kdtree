@@ -184,7 +184,7 @@ bool found_correct(double * X,
 void threads(size_t N, int k, int binsize)
 {
     double * X = rand_points(N);
-    kdtree_t * T = kdtree_new(X, N, 3, binsize);
+    kdtree_t * T = kdtree_new(X, N, binsize);
     // Timing with 1, ... 8 threads
     for(int nthreads = 1; nthreads < 9; nthreads++)
     {
@@ -206,7 +206,7 @@ void basic_tests(size_t N, int max_leaf_size)
     double * X = rand_points(N);
 
     printf("Create and free a Tree\n");
-    kdtree_t * T = kdtree_new(X, N, 3, max_leaf_size);
+    kdtree_t * T = kdtree_new(X, N, max_leaf_size);
     if(T == NULL)
     {
         printf("Could not construct a kd-tree\n");
@@ -239,7 +239,7 @@ void test_query_radius(size_t N, double radius)
 {
     printf("test_query_radius(N=%zu, r=%f)\n", N, radius);
     double * X = rand_points(N);
-    kdtree_t * T = kdtree_new(X, N, DIM, 10);
+    kdtree_t * T = kdtree_new(X, N, 10);
     size_t n = 0;
 
     struct timespec tstart, tend;
@@ -277,6 +277,7 @@ void test_query_radius(size_t N, double radius)
         printf("Agreement with brute force\n");
     } else {
         printf("Error: Brute force found %zu\n", n_brute_force);
+        assert(0);
     }
     kdtree_free(&T);
     free(idx);
@@ -290,7 +291,7 @@ void benchmark(size_t N, int k, int binsize)
 
     struct timespec tstart, tend;
     clock_gettime(CLOCK_REALTIME, &tstart);
-    kdtree_t * T = kdtree_new(X, N, DIM, binsize);
+    kdtree_t * T = kdtree_new(X, N, binsize);
     if(T == NULL)
     {
         printf("Could not construct a kd-tree\n");
@@ -394,14 +395,13 @@ int main(int argc, char ** argv)
 
     basic_tests(N, binsize);
 
+    test_query_radius(N, 1);
     test_query_radius(N, 10);
     test_query_radius(N, 100);
-
-    benchmark(N, k, binsize);
-
+    test_query_radius(N, 100);
 
     threads(N, k, binsize);
-
+    benchmark(N, k, binsize);
 
 
     return EXIT_SUCCESS;

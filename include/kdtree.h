@@ -54,7 +54,7 @@ typedef struct{
  * According to [1] a binsize (max_leaf_size) of 4-32 elements is optimal
  * regardless of k and the number of dimensions */
 kdtree_t * kdtree_new(const double * X,
-                      size_t N, size_t ndim, int binsize);
+                      size_t N, int binsize);
 
 
 /* Frees all resources associated with a tree and sets the pointer to NULL */

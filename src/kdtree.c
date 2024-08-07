@@ -312,14 +312,9 @@ kdtree_split(kdtree_t * T,
 
 kdtree_t *
 kdtree_new(const double * X,
-           size_t N, size_t ndim,
+           size_t N,
            int max_leaf_size)
 {
-    if(ndim !=  KDTREE_DIM)
-    {
-        printf("kdtree_new: Invalid number of dimensions\n");
-        return NULL;
-    }
 
     if(max_leaf_size < 1)
     {
