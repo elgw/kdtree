@@ -7,21 +7,6 @@
 // Make a shallow copy of a kd-tree for usage by another thread.
 kdtree_t * kdtree_copy(kdtree_t * );
 
-static void print_XID(double * XID, size_t N)
-{
-    size_t * ID = (size_t * ) XID;
-    for(size_t kk = 0 ; kk< N; kk++)
-    {
-        printf("  [%6zu] ", ID[kk*(1+KDTREE_DIM) + KDTREE_DIM]);
-        for(size_t dd = 0; dd < KDTREE_DIM; dd ++)
-        {
-            printf("%4.2f ", XID[kk * (1+KDTREE_DIM) + dd]);
-        }
-        printf("\n");
-
-
-    }
-}
 
 /*  Hoare's partition scheme
     Adopted from arch/24/03/11_quickselect */
@@ -117,7 +102,8 @@ kdtree_t * kdtree_copy(kdtree_t * _T)
     assert(_T != NULL);
     if(_T == NULL)
         return NULL;
-    kdtree_t * T = malloc(sizeof(kdtree_t));
+    kdtree_t * T = calloc(1, sizeof(kdtree_t));
+    assert(T != NULL);
     memcpy(T, _T, sizeof(kdtree_t));
     T->k = -1;
     T->pq = NULL;
@@ -192,14 +178,14 @@ kdtree_split(kdtree_t * T,
     kdtree_node_t * node = T->nodes + node_id;
     assert(node->data_idx % XID_STRIDE == 0);
 
-    node_print_bbx(node);
+    //node_print_bbx(node);
 
     /* Possible to append children without running out of nodes? */
     if(2*node_id+2 >= T->n_nodes_alloc) {
         goto final;
     }
 
-    if(node->n_points < (size_t) T->binsize)
+    if(node->n_points < (size_t) T->max_leaf_size)
     {
     final: ; // Construct a "final" node without children
         node->node_left = -1;
@@ -225,7 +211,7 @@ kdtree_split(kdtree_t * T,
     node->split_dim = split_dim;
 
     double * XID = T->XID + node->data_idx;
-    assert(node->data_idx + node->n_points <= T->N*XID_STRIDE);
+    assert(node->data_idx + node->n_points <= T->n_points*XID_STRIDE);
     double pivot =
         get_median_from_strided(XID+split_dim,
                                 node->n_points,
@@ -233,7 +219,7 @@ kdtree_split(kdtree_t * T,
                                 XID_STRIDE);
 
     node->pivot = pivot;
-    printf("[%f   (pivot=%f)   %f]\n", node->bbx[2*split_dim], pivot, node->bbx[2*split_dim+1]);
+    //printf("[%f   (pivot=%f)   %f]\n", node->bbx[2*split_dim], pivot, node->bbx[2*split_dim+1]);
     assert(node->bbx[2*split_dim] <= pivot);
     assert(node->bbx[2*split_dim+1] >= pivot);
 
@@ -250,11 +236,9 @@ kdtree_split(kdtree_t * T,
     size_t nLow = 0;
     size_t nHigh = 0;
 
-    size_t * ID = (size_t *) XID;
-    assert(XID[KDTREE_DIM] < T->N);
+
+    assert(XID[KDTREE_DIM] < T->n_points);
     partition(XID, node->n_points, split_dim, pivot, &nLow, &nHigh);
-
-
 
     {
         size_t left_id = 2*node_id+1; /* according to Etyzinger / Binary tree */
@@ -284,10 +268,6 @@ kdtree_split(kdtree_t * T,
 
         node_right->data_idx = node->data_idx + nLow*XID_STRIDE;
 
-        if(node_right->data_idx + node_right->n_points > T->N)
-        {
-            printf("node->data_idx = %zu, node->n_points = %zu, T->N = %zu\n", node->data_idx, node->n_points, T->N);
-        }
         kdtree_split(T, right_id);
     }
 
@@ -297,7 +277,7 @@ kdtree_split(kdtree_t * T,
 kdtree_t *
 kdtree_new(const double * X,
            size_t N, size_t ndim,
-           int binsize)
+           int max_leaf_size)
 {
     if(ndim !=  KDTREE_DIM)
     {
@@ -305,7 +285,7 @@ kdtree_new(const double * X,
         return NULL;
     }
 
-    if(binsize < 1)
+    if(max_leaf_size < 1)
     {
         printf("kdtree_new: invalid bin size\n");
         return NULL;
@@ -317,22 +297,28 @@ kdtree_new(const double * X,
         return NULL;
     }
 
+    #ifndef NDEBUG
+    printf("kdtree warning: Not compiled with -DNDEBUG. Performance will be restrained. \n");
+    #endif
+
     /* Set up the tree and the basic settings*/
     kdtree_t * T = calloc(1, sizeof(kdtree_t));
     assert( T!= NULL);
-    T->binsize = binsize;
+    T->max_leaf_size = max_leaf_size;
     T->k = -1; // not set up for queries of any size
-    T->N = N;
+    T->n_points = N;
 
     /* Allocate storage for the nodes */
     /* This use too much memory, we only need approximately
-     * N/binsize nodes. We could try 2*N/binsize and grow
+     * N/max_leaf_size nodes. We could try 2*N/max_leaf_size and grow
      * later on if needed */
     T->n_nodes_alloc = 2*N;
     T->nodes = calloc(T->n_nodes_alloc, sizeof(kdtree_node_t));
+    assert(T->nodes != NULL);
 
     /* Copy the data points and attach an index */
-    T->XID = malloc((KDTREE_DIM+1)*N*sizeof(double));
+    T->XID = calloc((KDTREE_DIM+1)*N, sizeof(double));
+    assert(T->XID != NULL);
     for(size_t kk = 0; kk<N; kk++)
     {
         memcpy(T->XID+kk*(KDTREE_DIM+1),
@@ -351,6 +337,7 @@ kdtree_new(const double * X,
     //ymin -= 2*dy; ymax += 2*dy;
 
     T->median_buffer = calloc(N, sizeof(double));
+    assert(T->median_buffer != NULL);
 
     kdtree_node_t * node = T->nodes;
     bounding_box(X, N, KDTREE_DIM, node->bbx);
@@ -599,6 +586,7 @@ size_t * kdtree_query_knn(kdtree_t * T, const double * Q, int k)
     if(T->KN == NULL)
     {
         T->KN = calloc(k, sizeof(size_t));
+        assert(T->KN != NULL);
     }
 
 
@@ -653,7 +641,8 @@ void * _p_query(void * _config)
 
 size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k, int nthreads)
 {
-    size_t * KNN = malloc(nQ*k*sizeof(size_t));
+    size_t * KNN = calloc(nQ*k, sizeof(size_t));
+    assert(KNN != NULL);
 
     if(nthreads == 1)
     {
@@ -664,8 +653,10 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
         }
         return KNN;
     } else {
-        pthread_t * threads = malloc(nthreads*sizeof(pthread_t));
-        _p_query_t * confs = malloc(nthreads*sizeof(_p_query_t));
+        pthread_t * threads = calloc(nthreads, sizeof(pthread_t));
+        assert(threads != NULL);
+        _p_query_t * confs = calloc(nthreads, sizeof(_p_query_t));
+        assert(confs != NULL);
 
         for(int kk = 0; kk<nthreads; kk++)
         {

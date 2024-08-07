@@ -9,9 +9,11 @@
 
 #define DIM 3
 
+
 double * rand_points(size_t N)
 {
-    double * X = malloc(DIM*N*sizeof(double));
+    double * X = calloc(DIM*N, sizeof(double));
+    assert(X != NULL);
     for(size_t kk = 0; kk<DIM*N; kk++)
     {
         X[kk] = 1000 * (double) rand() / (double) RAND_MAX;
@@ -43,7 +45,8 @@ size_t get_peakMemoryKB(void)
 #ifndef __APPLE__
 size_t get_peakMemoryKB(void)
 {
-  char * statfile = malloc(100*sizeof(char));
+    char * statfile = calloc(100, sizeof(char));
+    assert(statfile != NULL);
   sprintf(statfile, "/proc/%d/status", getpid());
   FILE * sf = fopen(statfile, "r");
   if(sf == NULL)
@@ -79,6 +82,10 @@ size_t get_peakMemoryKB(void)
   // since the last three characters are ' kb' we can skip them and parse in between
   size_t peakMemoryKB = 0;
   //  printf("peakline: '%s'\n", peakline);
+  if(peakline == NULL)
+  {
+      return 0;
+  }
   if(strlen(peakline) > 11)
   {
     peakline[strlen(peakline) -4] = '\0';
@@ -193,12 +200,12 @@ void threads(size_t N, int k, int binsize)
     return;
 }
 
-void basic_tests(size_t N, int k, int binsize)
+void basic_tests(size_t N, int max_leaf_size)
 {
     double * X = rand_points(N);
 
     printf("Create and free a Tree\n");
-    kdtree_t * T = kdtree_new(X, N, 3, binsize);
+    kdtree_t * T = kdtree_new(X, N, 3, max_leaf_size);
     if(T == NULL)
     {
         printf("Could not construct a kd-tree\n");
@@ -222,7 +229,7 @@ void print_query_and_result(const double * X,
     for(size_t kk = 0; kk< k; kk++)
     {
         printf("#%zu (%f, %f, %f)\n", idx[kk],
-               Q[DIM*idx[kk]],Q[DIM*idx[kk]+1], Q[DIM*idx[kk]+2]);
+               X[DIM*idx[kk]], X[DIM*idx[kk]+1], X[DIM*idx[kk]+2]);
     }
     return;
 }
@@ -345,7 +352,7 @@ int main(int argc, char ** argv)
     printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
 
 
-    basic_tests(N, k, binsize);
+    basic_tests(N, binsize);
 
 
     benchmark(N, k, binsize);

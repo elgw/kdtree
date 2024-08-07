@@ -4,10 +4,12 @@ static void pqheap_heapify(pqheap_t * restrict B);
 
 pqheap_t * pqheap_new(int k)
 {
-    pqheap_t * B = malloc(sizeof(pqheap_t));
+    pqheap_t * B = calloc(1, sizeof(pqheap_t));
+    assert(B != NULL);
     B->n = 0;
     B->k = k;
-    B->G = malloc(k*sizeof(pqheap_item_t));
+    B->G = calloc(k, sizeof(pqheap_item_t));
+    assert(B->G != NULL);
     return B;
 }
 

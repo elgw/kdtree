@@ -41,18 +41,16 @@ typedef struct {
 } kdtree_node_t;
 
 typedef struct{
-    size_t binsize;
-
     /* Node allocation  */
     kdtree_node_t * nodes; /* Array of nodes, nodes[0] is the root */
     size_t n_nodes_alloc; // Total number of nodes
-    size_t next; // What node to write to during construction
 
-    /* We will store (x, y, z), id in the same array */
+    /* Storage for coordinates and their indexes, [(x, y, z), id] */
     double * XID;
 
-
-    size_t N; // Number of supplied points
+    /* Maximum number of points per leaf (i.e. end node) */
+    size_t max_leaf_size;
+    size_t n_points; // Number of supplied points
 
     int direct_path;
     // For queries
