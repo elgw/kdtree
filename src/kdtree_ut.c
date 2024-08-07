@@ -7,19 +7,21 @@
 #include "../include/kdtree.h"
 #include "pqheap.h"
 
+#define DIM 3
+
 double * rand_points(size_t N)
 {
-    double * X = malloc(2*N*sizeof(double));
-    for(size_t kk = 0; kk<2*N; kk++)
+    double * X = malloc(DIM*N*sizeof(double));
+    for(size_t kk = 0; kk<DIM*N; kk++)
     {
         X[kk] = 1000 * (double) rand() / (double) RAND_MAX;
     }
     return X;
 }
 
-static double eudist2(const double * A, const double * B)
+static double eudist3(const double * A, const double * B)
 {
-    return pow(A[0]-B[0],2) + pow(A[1]-B[1], 2);
+    return pow(A[0]-B[0],2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
 }
 
 static double timespec_diff(struct timespec* end, struct timespec * start)
@@ -104,10 +106,10 @@ void fprint_peakMemory(FILE * fout)
 bool is_radially_sorted(const double * X, const double * Q, const size_t * N, const int k)
 {
     // Check that the distance to Q is increasing or constant
-    double r0 = eudist2(X + 2*N[0], Q);
+    double r0 = eudist3(X + DIM*N[0], Q);
     for(int kk = 1; kk < k; kk++)
     {
-        double r1 = eudist2(X + 2*N[kk], Q);
+        double r1 = eudist3(X + DIM*N[kk], Q);
         if(r0 > r1)
         {
             return false;
@@ -140,8 +142,8 @@ bool found_correct(double * X,
     // i.e., not duplicates we should find
     // exactly k-1 points below r
 
-    double r0 = eudist2(Q, X + 2*knn[k-2]);
-    double r1 = eudist2(Q, X + 2*knn[k-1]);
+    double r0 = eudist3(Q, X + DIM*knn[k-2]);
+    double r1 = eudist3(Q, X + DIM*knn[k-1]);
 
     if(r0 == r1)
     {
@@ -153,7 +155,7 @@ bool found_correct(double * X,
 
     for(size_t kk = 0; kk<N; kk++)
     {
-        double rp = eudist2(Q, X + 2*kk);
+        double rp = eudist3(Q, X + DIM*kk);
 
         if(rp < r)
         {
@@ -174,7 +176,7 @@ bool found_correct(double * X,
 void threads(size_t N, int k, int binsize)
 {
     double * X = rand_points(N);
-    kdtree_t * T = kdtree_new(X, N, 2, binsize);
+    kdtree_t * T = kdtree_new(X, N, 3, binsize);
     // Timing with 1, ... 8 threads
     for(int nthreads = 1; nthreads < 9; nthreads++)
     {
@@ -195,10 +197,8 @@ void basic_tests(size_t N, int k, int binsize)
 {
     double * X = rand_points(N);
 
-
-
     printf("Create and free a Tree\n");
-    kdtree_t * T = kdtree_new(X, N, 2, binsize);
+    kdtree_t * T = kdtree_new(X, N, 3, binsize);
     if(T == NULL)
     {
         printf("Could not construct a kd-tree\n");
@@ -218,11 +218,11 @@ void print_query_and_result(const double * X,
                        const size_t * idx,
                        size_t k)
 {
-    printf("Query point: (%f, %f)\n", Q[0], Q[1]);
+    printf("Query point: (%f, %f, %f)\n", Q[0], Q[1], Q[2]);
     for(size_t kk = 0; kk< k; kk++)
     {
-        printf("#%zu (%f, %f)\n", idx[kk],
-               Q[2*idx[kk]],Q[2*idx[kk]+1]);
+        printf("#%zu (%f, %f, %f)\n", idx[kk],
+               Q[DIM*idx[kk]],Q[DIM*idx[kk]+1], Q[DIM*idx[kk]+2]);
     }
     return;
 }
@@ -233,7 +233,7 @@ void benchmark(size_t N, int k, int binsize)
 
     struct timespec tstart, tend;
     clock_gettime(CLOCK_REALTIME, &tstart);
-    kdtree_t * T = kdtree_new(X, N, 2, binsize);
+    kdtree_t * T = kdtree_new(X, N, DIM, binsize);
     if(T == NULL)
     {
         printf("Could not construct a kd-tree\n");
@@ -249,7 +249,7 @@ void benchmark(size_t N, int k, int binsize)
         {
             kdtree_node_t node = T->nodes[next];
             printf("%d, %zu ", next, node.n_points);
-            node_print_bbx(T, &node);
+            node_print_bbx(&node);
             next = node.node_right;
         }
     }
@@ -259,7 +259,7 @@ void benchmark(size_t N, int k, int binsize)
     for(size_t kk = 0; kk<N; kk++)
     {
         //printf("\n-> Q: %zu (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
-        size_t * knn = kdtree_query_knn(T, X+2*kk, k);
+        size_t * knn = kdtree_query_knn(T, X+DIM*kk, k);
         if(0){
             for(int kk = 0; kk<3; kk++)
             {
@@ -285,7 +285,7 @@ void benchmark(size_t N, int k, int binsize)
         {
             printf("\r %zu / %zu", kk, N); fflush(stdout);
         }
-        double * Q = X+2*kk;
+        double * Q = X+DIM*kk;
         size_t * knn = kdtree_query_knn(T, Q, k);
         bool ok = is_radially_sorted(X, Q, knn, k);
         bool all_ok = true;
@@ -345,6 +345,9 @@ int main(int argc, char ** argv)
 
 
     basic_tests(N, k, binsize);
+
+
+    return EXIT_SUCCESS;
 
     benchmark(N, k, binsize);
 

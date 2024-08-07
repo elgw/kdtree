@@ -36,6 +36,8 @@ typedef struct {
     int node_left; // children TODO not needed
     int node_right;
     size_t data_idx; // Where in X and in idx that the data can be found
+    double pivot;
+    double split_dim;
 } kdtree_node_t;
 
 typedef struct{
@@ -43,12 +45,12 @@ typedef struct{
 
     /* Node allocation  */
     kdtree_node_t * nodes; /* Array of nodes, nodes[0] is the root */
-    size_t n_nodes; // Total number of nodes
+    size_t n_nodes_alloc; // Total number of nodes
     size_t next; // What node to write to during construction
 
     /* We will store (x, y, z), id in the same array */
     double * XID;
-    assert(sizeof(double) == sizeof(size_t));
+
 
     size_t N; // Number of supplied points
 
@@ -99,7 +101,7 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
 
 size_t kdtree_query_closest(kdtree_t * T, double * X);
 
-void node_print_bbx(const kdtree_t * T, const kdtree_node_t * N);
+void node_print_bbx(const kdtree_node_t * N);
 
 /* Run some self-tests */
 void kdtree_validate(kdtree_t * T);
