@@ -59,9 +59,9 @@ partition(double * restrict X,
 
     while(1)
     {
-        do { low++; } while ( X[low*XID_STRIDE+vdim] <= pivot && low < n2 );
+        do { low++; } while ( (low < n2)  && X[low*XID_STRIDE+vdim] <= pivot );
 
-        do { high--; } while ( X[high*XID_STRIDE+vdim] > pivot && high > 0);
+        do { high--; } while ( (high > 0) && X[high*XID_STRIDE+vdim] > pivot );
 
         if(low >= high)
         { *nLow = low;  *nHigh = n-*nLow;

@@ -26,7 +26,15 @@ static void dvarray_n_more(struct dvarray * A, size_t nmore)
         {
             new_size = 1.2*A->n_alloc;
         }
-        A->data = realloc(A->data, 3*new_size*sizeof(double));
+        double * t = realloc(A->data, 3*new_size*sizeof(double));
+        if(t == NULL) // This makes fanalyzer happy
+        {
+            free(A->data);
+        }
+        assert(t != NULL);
+        A->data = t;
+
+
         assert(A->data != NULL);
         A->n_alloc = new_size;
     }
@@ -35,7 +43,9 @@ static void dvarray_n_more(struct dvarray * A, size_t nmore)
 static void dvarray_insert_vector(struct dvarray * A, const double * X)
 {
     dvarray_n_more(A, 1);
-    memcpy(A->data + 3*A->n_used, X, 3*sizeof(double));
+    memcpy(A->data + 3*A->n_used,
+           X,
+           3*sizeof(double));
     A->n_used++;
     return;
 }
@@ -53,6 +63,7 @@ struct dvarray * dvarray_new(size_t n)
     struct dvarray * A = calloc(1, sizeof(struct dvarray));
     assert(A != NULL);
     A->data = calloc(3*n, sizeof(double));
+    assert(A->data != NULL);
     A->n_alloc = n;
     return A;
 }
@@ -115,6 +126,7 @@ size_t get_peakMemoryKB(void)
       if(strncmp(line, "VmPeak", 6) == 0)
       {
         peakline = strdup(line);
+        assert(peakline != NULL);
       }
     }
   }
@@ -230,7 +242,9 @@ bool found_correct(double * X,
 void threads(size_t N, int k, int binsize)
 {
     double * X = rand_points(N);
+
     kdtree_t * T = kdtree_new(X, N, binsize);
+    assert(T != NULL);
     // Timing with 1, ... 8 threads
     for(int nthreads = 1; nthreads < 9; nthreads++)
     {
@@ -303,6 +317,7 @@ void test_align_dots(size_t N)
     printf("Pairing radius: %f\n", pairing_radius);
 
     kdtree_t * TA = kdtree_new(A, N, 10);
+    assert(TA != NULL);
     struct dvarray * arr = dvarray_new(N);
     size_t nfound_total = 0;
     for(size_t kk = 0; kk < N; kk++)
@@ -317,6 +332,7 @@ void test_align_dots(size_t N)
             D[0] = Q[0] - P[0];
             D[1] = Q[1] - P[1];
             D[2] = Q[2] - P[2];
+            //printf("%f %f %f, %f %f %f, %f %f %f\n", Q[0], Q[1], Q[2], P[0], P[1], P[2], D[0], D[1], D[2]);
             dvarray_insert_vector(arr, D);
         }
         nfound_total += nfound;
@@ -327,7 +343,9 @@ void test_align_dots(size_t N)
     free(A); A = NULL;
     free(B); B = NULL;
 
+    printf("\n");
     kdtree_t * TD = kdtree_new(arr->data, arr->n_used, 10);
+    assert(TD != NULL);
     kdtree_print_info(TD);
     dvarray_free(arr);
     arr = NULL;
@@ -377,6 +395,7 @@ void test_query_radius(size_t N, double radius)
     printf("test_query_radius(N=%zu, r=%f)\n", N, radius);
     double * X = rand_points(N);
     kdtree_t * T = kdtree_new(X, N, 10);
+    assert(T != NULL);
     size_t n = 0;
 
     struct timespec tstart, tend;
@@ -535,7 +554,6 @@ int main(int argc, char ** argv)
     printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
 
     benchmark(N, k, binsize);
-    return EXIT_SUCCESS;
 
     basic_tests(N, binsize);
 

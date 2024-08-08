@@ -25,9 +25,9 @@ partition(double * restrict X, const size_t n,
     int64_t n2 = n;
     while(1)
     {
-        do { low++; } while ( X[low] <= pivot && low < n2 );
+        do { low++; } while ( low < n2 && X[low] <= pivot );
 
-        do { high--; } while ( X[high] > pivot && high > 0);
+        do { high--; } while ( high > 0 && X[high] > pivot);
 
         if(low >= high)
         { *nLow = low;  *nHigh = n-*nLow;
@@ -53,8 +53,9 @@ partition(double * restrict X, const size_t n,
 }
 
 
-static double _quickselect(double * restrict X, const size_t N, const size_t s,
-                          const int use_pb, double ** restrict PB)
+static double _quickselect(double * restrict X,
+                           const size_t N, const size_t s,
+                           size_t recursion_depth, size_t last_N)
 {
 
     assert(N!=0);
@@ -119,18 +120,32 @@ static double _quickselect(double * restrict X, const size_t N, const size_t s,
     { assert(C[kk] > pivot); }
 #endif
 
-    /* Which of the partitions contain the median? */
+    /* If we could not zoom in any in two iterations
+    * it is likely that the remaing data contains only duplicates.
+    * to avoid infinite recursion we end here. */
+    if(nA == 0 || nA == N)
+    {
+        if(last_N == N)
+        {
+            return X[0];
+        }
+    }
 
+    /* Which of the partitions contain the median? */
     if(s < nA)
     {
         assert(nA != 0);
-        return _quickselect(A, nA, s, use_pb, PB);
+        return _quickselect(A, nA, s, recursion_depth+1, N);
     }
 
-    return _quickselect(C, nC, s-nA, use_pb, PB);
+    if(nC == 0)
+    {
+        return X[N-1];
+    }
+    return _quickselect(C, nC, s-nA, recursion_depth, N);
 }
 
 double quickselect(double * X, size_t N, size_t s)
 {
-    return _quickselect(X, N, s, 0, NULL);
+    return _quickselect(X, N, s, 0, 2*N);
 }

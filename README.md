@@ -65,9 +65,8 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
   but `kdtree_query_knn_multi` can be used to query multiple points in
   parallel.
 
-- Uses quickselect to find the pivot point, i.e. not exacly the
-  median. Optionally GSL (`gsl_stats_median`) can be used for this
-  with a compile switch.
+- Can use GSL (`gsl_stats_median`) to find the pivot or the provided
+  quick-select.
 
 ## Performance
 
@@ -115,15 +114,18 @@ proably built upon
 [ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
 but that is just a hypothesis, not a fact.
 
-## TODO
+## Current validation steps:
+More tests should be written. Especially to cover corner cases. The
+current test battery includes:
+
+- Should compile with zero warnings using `gcc -Wall -Wextra -pedantic -std=gnu11 -g3 -fanalyzer`.
+- Passes the few tests in `kdtree_ut.c`.
+- **valgrind** finds no issues.
+
+## To Do
 - [ ] For N dimensions. Remove `#define KDTREE_DIM 3` and make it a
       parameter. Write tests and do the small adjustments needed.
 - [ ] Remove `<pthread.h>` from the main code for portability.
 - [ ] Also fix so that `kdtree_query_knn` is thread safe (via a query
       object containing the per-thread data).
-
-## Maybe
-- [Implicit](https://en.wikipedia.org/wiki/Implicit_k-d_tree)
-- Option to pass a list of pointers instead of just returning indexes (when I need it).
-
-- [ ] write some test image [https://github.com/skeeto/bmp/blob/master/test.c]
+- [ ] More validation.
