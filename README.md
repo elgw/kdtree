@@ -35,7 +35,8 @@ documentation. Look in `kdtree_ut.c` for usage examples.
   heaps](https://en.wikipedia.org/wiki/Binary_heap). On the positive
   side this give a good memory locality and fast queries. The major
   downside is that we need to decide upfront how deep the tree should
-  be. The number of nodes for a given depth is a triangular number, .e., $`n(n+1) / 2`$.
+  be, which means that the memory usage (for the tree, excluding the
+  data points) will grow in steps of approximately 2.
 
 
 Supported operations:
@@ -53,3 +54,14 @@ Supported operations:
 - Option to pass a list of pointers instead of just returning indexes (when I need it).
 
 - [ ] write some test image [https://github.com/skeeto/bmp/blob/master/test.c]
+
+
+## Performance
+
+Finding the 5 nearest neighbours for each point among N=10,000,000:
+
+| Software | Tree construction | Query | Total time | VmPeak |
+| this     | 3 s| 34 s | 37 s | 795 MB |
+| sklearn    | 13 s | 80 s | 93 s | 3419 MB |
+
+For the python code, see `test_python.py`.

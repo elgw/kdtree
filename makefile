@@ -8,7 +8,7 @@ DEBUG?=0
 ifeq ($(DEBUG),1)
 CFLAGS+=-g3
 else
-CFLAGS+=-O3
+CFLAGS+=-O3 -DNDEBUG
 LDFLAGS+=-flto
 endif
 

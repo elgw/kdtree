@@ -340,13 +340,30 @@ kdtree_new(const double * X,
     T->max_leaf_size = max_leaf_size;
     T->n_points = N;
 
-    /* Allocate storage for the nodes */
-    /* This use too much memory, we only need approximately
-     * N/max_leaf_size nodes. We could try 2*N/max_leaf_size and grow
-     * later on if needed */
-    T->n_nodes_alloc = 2*N;
+    /* Allocate storage for the nodes. We allocate enough
+     * nodes for a complete binary tree up to some depth.
+     * I.e. we will have 1, 3, 7, 15, ... (2^(L+1)-1) nodes where L
+     * is the number of leafs.
+     */
+
+    {
+        /* If each leaf is 50% full we will have approximately */
+        double n_leafs0 = 2.0* (double) N / (double) max_leaf_size;
+        /* Since it has to be a power of two we pick */
+        double n_leafs = pow(2.0, ceil(log2(n_leafs0)));
+        /* Then the number of nodes needed is */
+        T->n_nodes_alloc = n_leafs*2-1;
+    }
+    //T->n_nodes_alloc = 2*N;
     T->nodes = calloc(T->n_nodes_alloc, sizeof(kdtree_node_t));
     assert(T->nodes != NULL);
+    if(T->nodes == NULL)
+    {
+        printf("kdtree_new: Memory allocation failed. Tried to allocate for %zu nodes\n"
+               "            but couldn't get it from the system\n",
+               T->n_nodes_alloc);
+        return NULL;
+    }
 
     /* Copy the data points and attach an index */
     T->XID = calloc((KDTREE_DIM+1)*N, sizeof(double));
@@ -721,6 +738,13 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
 
 void kdtree_validate(kdtree_t * T)
 {
+    #ifdef NDEBUG
+    printf("kdtree_validate does not work when NDEBUG is defined\n");
+    if(T == NULL)
+    {
+        printf("T is null\n");
+    }
+    #else
     printf("kdtree_validate()\n");
     assert(T != NULL);
     assert(sizeof(double) == sizeof(size_t));
@@ -757,6 +781,7 @@ void kdtree_validate(kdtree_t * T)
         }
     }
     printf("done\n");
+    #endif
 }
 
 struct darray {

@@ -462,7 +462,7 @@ void benchmark(size_t N, int k, int binsize)
     printf("Total time: %f s\n", t_build_tree + t_all_knn);
 
 
-
+#ifndef NDEBUG
     printf("-> Validation\n");
     for(size_t kk = 0; kk<N; kk++)
     {
@@ -501,6 +501,7 @@ void benchmark(size_t N, int k, int binsize)
         }
     }
     printf("\r %zu / %zu\n", N, N);
+    #endif
     kdtree_free(T);
     free(X);
 
@@ -529,6 +530,8 @@ int main(int argc, char ** argv)
     }
     printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
 
+    benchmark(N, k, binsize);
+    return EXIT_SUCCESS;
 
     basic_tests(N, binsize);
 
@@ -539,7 +542,7 @@ int main(int argc, char ** argv)
     test_align_dots(5000);
 
     threads(N, k, binsize);
-    benchmark(N, k, binsize);
+
 
 
     return EXIT_SUCCESS;
