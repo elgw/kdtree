@@ -76,9 +76,10 @@ For reference, there are also results from
 test code. Sklearn is probably an interface to
 [ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
 but that is just a hypothesis, not a fact. The comparison is not fair,
-as comparisons seldom are since the python code also stores the
-results (an Nxk matrix). And the memory measurement includes the whole
-Python environment, not just the algorithm and the associated data.
+as comparisons seldom are, since the Python code stores the full
+results (an Nxk matrix) while that is discarded in my code. For
+sklearn, the memory measurement includes the whole Python environment,
+not just the algorithm and the associated data.
 
 Finding the k=5 nearest neighbours for each point among
 N=1,000.
@@ -119,14 +120,15 @@ N = 100,000,000
 | sklearn  |             187 s | 968 s |     1155 s | 20580 MB |
 
 
-
 ## Current validation steps
 
 More tests should be written. Especially to cover corner cases. The
 current test pack includes:
 
-- Should compile with zero warnings using `gcc -Wall -Wextra -pedantic -std=gnu11 -g3 -fanalyzer`.
-- Passes the few tests in `kdtree_ut.c`.
+- Should compile with zero warnings using `gcc -Wall -Wextra -pedantic
+  -std=gnu11 -g3 -fanalyzer`.
+- Passes the few tests in `kdtree_ut.c`, some of them are comparisons
+  to brute force calculations.
 - **valgrind** finds no issues.
 
 ## To Do
