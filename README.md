@@ -19,8 +19,7 @@ size_t * knn = kdtree_query_knn(T, Q, k);
 size_t * idx = kdtree_query_radius(T, Q, radius, &n);
 
 /* When done */
-kdtree_free(&T);
-assert(T = NULL);
+kdtree_free(T);
 ```
 
 See `kdtree.h` for the complete function signatures and some
@@ -28,9 +27,15 @@ documentation. Look in `kdtree_ut.c` for usage examples.
 
 ## Details:
 - Partitioning the data using Hoare's scheme.
-- Using [Eytzinger](https://arxiv.org/abs/1509.05053) for the node
-  layout in memory which is the same as used in [binary
-  heaps](https://en.wikipedia.org/wiki/Binary_heap)
+
+- The memory layout of the nodes has a big impact on performance and
+  memory usage. The code in this repo use the
+  [Eytzinger](https://arxiv.org/abs/1509.05053) layout, which is the
+  same as used in [binary
+  heaps](https://en.wikipedia.org/wiki/Binary_heap). On the positive
+  side this give a good memory locality and fast queries. The major
+  downside is that we need to decide upfront how deep the tree should
+  be. The number of nodes for a given depth is a triangular number, .e., $`n(n+1) / 2`$.
 
 
 Supported operations:

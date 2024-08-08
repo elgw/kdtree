@@ -57,8 +57,8 @@ kdtree_t * kdtree_new(const double * X,
                       size_t N, int binsize);
 
 
-/* Frees all resources associated with a tree and sets the pointer to NULL */
-void kdtree_free(kdtree_t ** _T);
+/* Frees all resources associated with a tree */
+void kdtree_free(kdtree_t * T);
 
 /* Query one point for its k nearest neighbours.  The returned array
  * contains the index of k points, sorted according to the distance of
@@ -103,3 +103,5 @@ void node_print_bbx(const kdtree_node_t * N);
 
 /* Run some self-tests */
 void kdtree_validate(kdtree_t * T);
+
+void kdtree_print_info(kdtree_t * T);

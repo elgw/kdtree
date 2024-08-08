@@ -10,6 +10,52 @@
 
 #define DIM 3
 
+/* Dynamic vector array */
+struct dvarray {
+    double * data;
+    size_t n_used;
+    size_t n_alloc;
+};
+
+static void dvarray_n_more(struct dvarray * A, size_t nmore)
+{
+    if(A->n_used + nmore >= A->n_alloc)
+    {
+        size_t new_size = A->n_alloc + nmore;
+        if(new_size < 1.2 *A->n_alloc)
+        {
+            new_size = 1.2*A->n_alloc;
+        }
+        A->data = realloc(A->data, 3*new_size*sizeof(double));
+        assert(A->data != NULL);
+        A->n_alloc = new_size;
+    }
+}
+
+static void dvarray_insert_vector(struct dvarray * A, const double * X)
+{
+    dvarray_n_more(A, 1);
+    memcpy(A->data + 3*A->n_used, X, 3*sizeof(double));
+    A->n_used++;
+    return;
+}
+
+static void dvarray_free(struct dvarray * A)
+{
+    free(A->data);
+    free(A);
+    return;
+}
+
+struct dvarray * dvarray_new(size_t n)
+{
+    assert(n > 0);
+    struct dvarray * A = calloc(1, sizeof(struct dvarray));
+    assert(A != NULL);
+    A->data = calloc(3*n, sizeof(double));
+    A->n_alloc = n;
+    return A;
+}
 
 double * rand_points(size_t N)
 {
@@ -196,7 +242,7 @@ void threads(size_t N, int k, int binsize)
         double t_query = timespec_diff(&tend, &tstart);
         printf("Took %f s using %d threads\n", t_query, nthreads);
     }
-    kdtree_free(&T);
+    kdtree_free(T);
     free(X);
     return;
 }
@@ -214,7 +260,7 @@ void basic_tests(size_t N, int max_leaf_size)
     }
     kdtree_validate(T);
 
-    kdtree_free(&T);
+    kdtree_free(T);
     printf("done\n");
 
     free(X);
@@ -232,6 +278,97 @@ void print_query_and_result(const double * X,
         printf("#%zu (%f, %f, %f)\n", idx[kk],
                X[DIM*idx[kk]], X[DIM*idx[kk]+1], X[DIM*idx[kk]+2]);
     }
+    return;
+}
+
+void test_align_dots(size_t N)
+{
+    printf("\n--> test_align_dots(%zu)\n", N);
+    double * A = rand_points(N);
+    double * B = calloc(3*N, sizeof(double));
+    assert(B != NULL);
+
+    double dx = 4.2;
+    double dy = 2;
+    double dz = -1;
+    printf("delta = (%f, %f, %f)\n", dx, dy, dz);
+    for(size_t kk = 0; kk < N; kk++)
+    {
+        B[3*kk + 0] = A[3*kk + 0] + dx;
+        B[3*kk + 1] = A[3*kk + 1] + dy;
+        B[3*kk + 2] = A[3*kk + 2] + dz;
+    }
+
+    double pairing_radius = 5;
+    printf("Pairing radius: %f\n", pairing_radius);
+
+    kdtree_t * TA = kdtree_new(A, N, 10);
+    struct dvarray * arr = dvarray_new(N);
+    size_t nfound_total = 0;
+    for(size_t kk = 0; kk < N; kk++)
+    {
+        double * Q = B + 3*kk;
+        size_t nfound = 0;
+        size_t * A_idx = kdtree_query_radius(TA, Q, pairing_radius, &nfound);
+        for(size_t ll = 0; ll < nfound; ll++)
+        {
+            double * P = A + 3*A_idx[ll];
+            double D[3] = {0};
+            D[0] = Q[0] - P[0];
+            D[1] = Q[1] - P[1];
+            D[2] = Q[2] - P[2];
+            dvarray_insert_vector(arr, D);
+        }
+        nfound_total += nfound;
+        free(A_idx);
+    }
+    printf("Found %zu pairs within the capture radius\n", nfound_total);
+    kdtree_free(TA); TA = NULL;
+    free(A); A = NULL;
+    free(B); B = NULL;
+
+    kdtree_t * TD = kdtree_new(arr->data, arr->n_used, 10);
+    kdtree_print_info(TD);
+    dvarray_free(arr);
+    arr = NULL;
+
+    double maxkde = 0;
+    double maxpos[3] = {0};
+    printf("Grid search\n");
+    for(double x = -pairing_radius; x <= pairing_radius; x+=0.5) {
+        for(double y = -pairing_radius; y <= pairing_radius; y+=0.5) {
+            for(double z = -pairing_radius; z <= pairing_radius; z+=0.5) {
+                double P[] = {x, y, z};
+                double v = kdtree_kde(TD, P, 1);
+                if(v > maxkde)
+                {
+                    maxkde = v;
+                    memcpy(maxpos, P, 3*sizeof(double));
+                }
+            }
+        }
+    }
+    // Write out image or numpy array https://developers.google.com/speed/webp/docs/api
+    printf("Max kde: %f, at (%f, %f, %f)\n",
+           maxkde, maxpos[0], maxpos[1], maxpos[2]);
+
+    /* Refinement over the grid search */
+    // GSL ... ?
+
+
+    kdtree_free(TD);
+    TD = NULL;
+
+    /*
+    size_t s = 1 + 2*pairing_radius;
+    double * M = calloc(s*s, sizeof(double));
+    for(size_t xx = 0; xx < s; xx++) {
+        for(size_t yy = 0 ; yy < s; yy++) {
+            double Q[3] = (double) xx -
+            M[xx + s*yy] = kdtree_kde(TD, )
+        }
+    */
+
     return;
 }
 
@@ -279,7 +416,7 @@ void test_query_radius(size_t N, double radius)
         printf("Error: Brute force found %zu\n", n_brute_force);
         assert(0);
     }
-    kdtree_free(&T);
+    kdtree_free(T);
     free(idx);
     free(X);
     return;
@@ -364,7 +501,7 @@ void benchmark(size_t N, int k, int binsize)
         }
     }
     printf("\r %zu / %zu\n", N, N);
-    kdtree_free(&T);
+    kdtree_free(T);
     free(X);
 
     fprint_peakMemory(stdout);
@@ -399,6 +536,7 @@ int main(int argc, char ** argv)
     test_query_radius(N, 10);
     test_query_radius(N, 100);
     test_query_radius(N, 100);
+    test_align_dots(5000);
 
     threads(N, k, binsize);
     benchmark(N, k, binsize);

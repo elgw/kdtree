@@ -112,18 +112,20 @@ node_print_bbx(const kdtree_node_t * N)
     return;
 }
 
-void kdtree_free(kdtree_t ** _T)
+void kdtree_free(kdtree_t * T)
 {
-    kdtree_t * T = _T[0];
     free(T->XID);
+    T->XID = NULL;
     free(T->nodes);
+    T->nodes = NULL;
     if(T->pq != NULL)
     {
         pqheap_free(&T->pq);
     }
     free(T->result);
+    T->result = NULL;
     free(T);
-    _T[0] = NULL;
+    return;
 }
 
 static kdtree_t * kdtree_copy_shallow(kdtree_t * _T)
@@ -759,13 +761,13 @@ void kdtree_validate(kdtree_t * T)
 
 struct darray {
     size_t * data;
-    size_t n_found;
+    size_t n_used;
     size_t n_alloc;
 };
 
 static void darray_n_more(struct darray * A, size_t nmore)
 {
-    if(A->n_found + nmore >= A->n_alloc)
+    if(A->n_used + nmore >= A->n_alloc)
     {
         size_t new_size = A->n_alloc + nmore;
         if(new_size < 1.2 *A->n_alloc)
@@ -801,8 +803,8 @@ static void _kdtree_query_radius(const kdtree_t * T,
         {
             if(eudist_sq(X + kk*XID_STRIDE, Q) < r2)
             {
-                res->data[res->n_found] = ID[kk*XID_STRIDE + KDTREE_DIM];
-                res->n_found++;
+                res->data[res->n_used] = ID[kk*XID_STRIDE + KDTREE_DIM];
+                res->n_used++;
             }
         }
         return;
@@ -837,7 +839,71 @@ kdtree_query_radius(const kdtree_t * T,
 
 
     size_t * result = res->data;
-    *nfound = res->n_found;
+    *nfound = res->n_used;
     free(res);
     return result;
+}
+
+static double gaussian(double d2, double sigma)
+{
+    return exp(-d2/sigma);
+}
+
+static double _kdtree_kde(const kdtree_t * T,
+                          const double * Q,
+                          size_t node_id,
+                          const double r2,
+                          const double sigma)
+{
+    kdtree_node_t * node = T->nodes + node_id;
+    if( ! bounds_overlap_ball_raw(node->bbx, Q, r2) )
+    {
+        return 0;
+    }
+
+    double kde = 0;
+    /* If we reached a leaf see what points match the criteria */
+    if(node_is_final(node))
+    {
+        double * X = T->XID + node->data_idx;
+
+        for(size_t kk = 0; kk < node->n_points; kk++)
+        {
+            double d2 = eudist_sq(X + kk*XID_STRIDE, Q);
+            kde += gaussian(d2, sigma);
+        }
+        return kde;
+    }
+
+
+    /* If not in a leaf, we see what children it makes sense to traverse */
+    // Some linear algebra: If Q + (mid-Q)/||mid-Q||*r crosses any of the 6 faces
+    // we need to check. Simpler way to determine ?
+    // if (x_intersect) if (y_intersect) if (z_intersect) then traverse ...
+
+    kde += _kdtree_kde(T, Q,
+                             node_left_child_id(node_id),
+                             r2, sigma);
+
+    kde += _kdtree_kde(T, Q,
+                            node_right_child_id(node_id),
+                            r2, sigma);
+
+    return kde;
+}
+
+
+double kdtree_kde(const kdtree_t * T, const double * Q, const double sigma)
+{
+    double r = 2.5*sigma;
+    return _kdtree_kde(T, Q, 0, pow(r,2.0), sigma);
+}
+
+void kdtree_print_info(kdtree_t * T)
+{
+    printf("kdtree info:\n");
+    printf("n_points: %zu\n", T->n_points);
+    printf("Root node bbx: ");
+    node_print_bbx(T->nodes);
+    return;
 }
