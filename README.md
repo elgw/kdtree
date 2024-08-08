@@ -2,18 +2,16 @@
 
 The [K-d tree](https://en.wikipedia.org/wiki/K-d_tree) is a fun data
 structure, useful for finding k-nearest neighbours and neighbours
-within some distance in point clouds. The can of course also be used
-to construct kernel density estimators. Although they can be
-implemented for high dimensions, the benefit compared to brute force
-drops quickly with the number of dimensions as you can read on the
-Wiki page.
+within some distance in point clouds. The benefits it provides
+compared to brute force drops quickly with the number of dimensions as
+you can read on the Wiki page.
 
-This repo is used for some of my other projects and supports exactly
-what I need and nothing more. I'd be happy if anyone else finds it
+This repo supports exactly what I need and nothing more, so the
+functionality is quite minimal. I'd be happy if anyone else finds it
 useful and can send me a bug report now and then, or even a pull
 request :)
 
-Not bullet tested, so please use something else for what is important!
+Usual warnings applies, use with caution!
 
 ## Usage
 Below are examples of the supported methods:
@@ -59,14 +57,14 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
   data points) will grow in steps of approximately 2 when the number
   of points passes some boundaries.
 
-- There is no parallel code for the tree construction at the moment,
+- There is no parallel code for the tree construction at the moment
   although that would be possible to do. `kdtree_query_radius` and
-  `kdtree_kde` are thread safe. `kdtree_query_knn` is not tread safe
+  `kdtree_kde` should be thread safe. `kdtree_query_knn` is not tread safe
   but `kdtree_query_knn_multi` can be used to query multiple points in
   parallel.
 
 - Can use GSL (`gsl_stats_median`) to find the pivot or the provided
-  quick-select.
+  quick select implementation.
 
 ## Performance
 
@@ -110,13 +108,14 @@ N = 100,000,000
 
 
 For the python code used in the test, see `test_python.py`. Sklearn is
-proably built upon
+probably an interface to
 [ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
 but that is just a hypothesis, not a fact.
 
-## Current validation steps:
+## Current validation steps
+
 More tests should be written. Especially to cover corner cases. The
-current test battery includes:
+current test pack includes:
 
 - Should compile with zero warnings using `gcc -Wall -Wextra -pedantic -std=gnu11 -g3 -fanalyzer`.
 - Passes the few tests in `kdtree_ut.c`.
