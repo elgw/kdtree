@@ -15,8 +15,12 @@ kdtree_t * T = kdtree_new(X, N, 20);
 /* Find the k nearest neighbours to Q [3 x 1] */
 size_t * knn = kdtree_query_knn(T, Q, k);
 
-/* Find any point within a distance of radius to */
+/* Find any point within a distance of radius to Q */
 size_t * idx = kdtree_query_radius(T, Q, radius, &n);
+
+/* Evaluate the point density under the point, using
+ * an isotropic Gaussian controlled by sigma.        */
+double v = kdtree_kde(T, Q, sigma);
 
 /* When done */
 kdtree_free(T);
@@ -26,8 +30,10 @@ See `kdtree.h` for the complete function signatures and some
 documentation. Look in `kdtree_ut.c` for usage examples.
 
 ## Details:
-- Partitioning the data using Hoare's scheme.
-
+- Partitioning the data using Hoare's scheme, typically used in
+  quicksort and quickselect.
+- For finding the k nearest neighbours the candidates are put in a
+  priority queue, implemented by a binary heap.
 - The memory layout of the nodes has a big impact on performance and
   memory usage. The code in this repo use the
   [Eytzinger](https://arxiv.org/abs/1509.05053) layout, which is the
@@ -44,27 +50,45 @@ Supported operations:
 - all points within some radius
 - KDE estimator with a Gaussian kernel.
 
-
-- [ ] My own median routine using quickselect
-
-
-
-## Maybe
-- [Implicit](https://en.wikipedia.org/wiki/Implicit_k-d_tree)
-- Option to pass a list of pointers instead of just returning indexes (when I need it).
-
-- [ ] write some test image [https://github.com/skeeto/bmp/blob/master/test.c]
-
-
 ## Performance
 
-Finding the 5 nearest neighbours for each point among N=10,000,000:
+Finding the 5 nearest neighbours for each point among N=1,000
 
+| Software | Tree construction |  Query | Total time |  VmPeak |
+| -------- | ----------------- | ------ | ---------- | ------- |
+| this     |            0.2 ms | 0.8 s  |     0.9 ms |    7 MB |
+| sklearn  |            0.5 ms | 1.8 ms |     2.4 ms | 1502 MB |
+
+N=1,000,000:
+
+| Software | Tree construction | Query | Total time |  VmPeak |
+| -------- | ----------------- | ----- | ---------- | ------- |
+| this     |             0.3 s | 2.0 s |      2.3 s |   90 MB |
+| sklearn  |             0.8 s | 5.8 s |      6.5 s | 1695 MB |
+
+N=10,000,000:
 
 | Software | Tree construction | Query | Total time |  VmPeak |
 | -------- | ----------------- | ----- | ---------- | ------- |
 | this     |               3 s |  34 s |       37 s |  795 MB |
 | sklearn  |              13 s |  80 s |       93 s | 3419 MB |
 
+N = 100,000,000
 
-For the python code, see `test_python.py`.
+| Software | Tree construction | Query | Total time |   VmPeak |
+| -------- | ----------------- | ----- | ---------- | -------- |
+| this     |              40 s | 483 s |      524 s |  8878 MB |
+| sklearn  |             187 s | 968 s |     1155 s | 20580 MB |
+
+
+
+For the python code, see `test_python.py`. Most likely it is built upon [ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src).
+
+## TODO
+- [ ] Remove the GSL dependency using my own median routine instead
+
+## Maybe
+- [Implicit](https://en.wikipedia.org/wiki/Implicit_k-d_tree)
+- Option to pass a list of pointers instead of just returning indexes (when I need it).
+
+- [ ] write some test image [https://github.com/skeeto/bmp/blob/master/test.c]
