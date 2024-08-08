@@ -4,13 +4,13 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
-#include <gsl/gsl_statistics_double.h>
+// #include <gsl/gsl_statistics_double.h>
 
 #include <pthread.h>
 
 #include "../include/kdtree.h"
 #include "pqheap.h"
-
+#include "quickselect.h"
 
 #define XID_STRIDE (KDTREE_DIM + 1)
 
@@ -183,7 +183,12 @@ double get_median_from_strided(const double * X, // data
         //printf("(%f) ", T[kk]);
     }
     //printf("\n");
+    //printf("N=%zu, N/2=%zu\n", N, N/2);
+#ifdef GSL
     double median = gsl_stats_median(T, 1, N);
+#else
+    double median = quickselect(T, N, N/2);
+#endif
     return median;
 }
 
@@ -746,13 +751,13 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
 
 void kdtree_validate(kdtree_t * T)
 {
-    #ifdef NDEBUG
+#ifdef NDEBUG
     printf("kdtree_validate does not work when NDEBUG is defined\n");
     if(T == NULL)
     {
         printf("T is null\n");
     }
-    #else
+#else
     printf("kdtree_validate()\n");
     assert(T != NULL);
     assert(sizeof(double) == sizeof(size_t));
@@ -789,7 +794,7 @@ void kdtree_validate(kdtree_t * T)
         }
     }
     printf("done\n");
-    #endif
+#endif
 }
 
 struct darray {
@@ -915,12 +920,12 @@ static double _kdtree_kde(const kdtree_t * T,
     // if (x_intersect) if (y_intersect) if (z_intersect) then traverse ...
 
     kde += _kdtree_kde(T, Q,
-                             node_left_child_id(node_id),
-                             r2, sigma);
+                       node_left_child_id(node_id),
+                       r2, sigma);
 
     kde += _kdtree_kde(T, Q,
-                            node_right_child_id(node_id),
-                            r2, sigma);
+                       node_right_child_id(node_id),
+                       r2, sigma);
 
     return kde;
 }

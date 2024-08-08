@@ -1,2 +1,3 @@
 *.o
 kdtree_ut
+libkdtree.so

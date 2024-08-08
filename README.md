@@ -55,11 +55,14 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
   be, which means that the memory usage (for the tree, excluding the
   data points) will grow in steps of approximately 2 when the number
   of points passes some boundaries.
-- There is no parallel code for the tree construction at the
-  moment. `kdtree_query_radius` and `kdtree_kde` are thread
-  safe. `kdtree_query_knn` is not tread safe but
-  `kdtree_query_knn_multi` can be used to query multiple points in
+- There is no parallel code for the tree construction at the moment,
+  although that would be possible to do. `kdtree_query_radius` and
+  `kdtree_kde` are thread safe. `kdtree_query_knn` is not tread safe
+  but `kdtree_query_knn_multi` can be used to query multiple points in
   parallel.
+- Uses quickselect for median finding. Optionally GSL can be used for
+  this. Performance seems equal but I would trust the GSL library more
+  than my code in this case.
 
 ## Performance
 
@@ -69,21 +72,28 @@ this repo.
 
 | Software | Tree construction |  Query | Total time |  VmPeak |
 | -------- | ----------------- | ------ | ---------- | ------- |
-| this     |            0.2 ms | 0.8 s  |     0.9 ms |    7 MB |
+| this     |            0.2 ms | 0.8 s  |     1.3 ms |    4 MB |
 | sklearn  |            0.5 ms | 1.8 ms |     2.4 ms | 1502 MB |
+
+N=5000
+
+| Software | Tree construction |  Query | Total time |  VmPeak |
+| -------- | ----------------- | ------ | ---------- | ------- |
+| this     |            1.3 ms | 4.9 s  |     6.2 ms |    4 MB |
+| sklearn  |            1.7 ms | 9.9 ms |    11.5 ms | 1504 MB |
 
 N=1,000,000:
 
 | Software | Tree construction | Query | Total time |  VmPeak |
 | -------- | ----------------- | ----- | ---------- | ------- |
-| this     |             0.3 s | 2.0 s |      2.3 s |   90 MB |
+| this     |             0.3 s | 2.0 s |      2.3 s |   87 MB |
 | sklearn  |             0.8 s | 5.8 s |      6.5 s | 1695 MB |
 
 N=10,000,000:
 
 | Software | Tree construction | Query | Total time |  VmPeak |
 | -------- | ----------------- | ----- | ---------- | ------- |
-| this     |               3 s |  34 s |       37 s |  795 MB |
+| this     |               3 s |  37 s |       40 s |  792 MB |
 | sklearn  |              13 s |  80 s |       93 s | 3419 MB |
 
 N = 100,000,000
@@ -101,7 +111,6 @@ upon
 but that is just a hypothesis, not a fact.
 
 ## TODO
-- [ ] Remove the GSL dependency using my own median routine instead
 - [ ] For N dimensions. Remove `#define KDTREE_DIM 3` and make it a
       parameter. Write tests and do the small adjustments needed.
 - [ ] Remove `<pthread.h>` from the main code for portability.

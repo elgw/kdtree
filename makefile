@@ -1,7 +1,14 @@
 CC=gcc
 
-CFLAGS=-Wall -Wextra -pedantic -std=gnu11 `pkg-config gsl --cflags`
-LDFLAGS=-lm -lpthread `pkg-config gsl --libs`
+CFLAGS=-Wall -Wextra -pedantic -std=gnu11
+LDFLAGS=-lm -lpthread
+
+GSL?=0
+
+ifeq ($(GSL),1)
+CFLAGS+=`pkg-config gsl --cflags` -DGSL
+LDFLAGS+=`pkg-config gsl --libs`
+endif
 
 DEBUG?=0
 
@@ -17,16 +24,14 @@ ifeq ($(FANALYZER),1)
 CFLAGS+=-fanalyzer
 endif
 
-kdtree_ut: src/kdtree.c makefile src/kdtree_ut.c src/pqheap.c include/kdtree.h
-	$(CC) $(CFLAGS) src/kdtree.c src/kdtree_ut.c src/pqheap.c $(LDFLAGS) -o kdtree_ut
+SRC=src/kdtree.c src/pqheap.c src/quickselect.c
+
+kdtree_ut: $(SRC) src/kdtree_ut.c makefile
+	$(CC) $(CFLAGS) $(SRC) src/kdtree_ut.c $(LDFLAGS) -o kdtree_ut
 
 
-kdtree: src/kdtree.c include/kdtree.h makefile
-	$(CC) $(CFLAGS) -c src/kdtree.c $(LDFLAGS)
+libkdtree.so: $(SRCFILES) makefile
+	$(CC) $(CFLAGS) -fPIC -shared $(SRC) $(LDFLAGS) -o libkdtree.so
 
-
-median5_ut: src/median5.c src/median5_ut.c
-	$(CC) $(CFLAGS) src/median5.c src/median5_ut.c $(LDFLAGS) -o median5
-
-amedian: src/amedian.c
-	$(CC) $(CFLAGS) src/amedian.c $(LDFLAGS) -o amedian
+install: libkdtree.so include/kdtree.h
+	# TODO COPY to DESIRED PATHS
