@@ -4,7 +4,10 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
-// #include <gsl/gsl_statistics_double.h>
+
+#ifdef GSL
+#include <gsl/gsl_statistics_double.h>
+#endif
 
 #include <pthread.h>
 

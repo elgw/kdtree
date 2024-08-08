@@ -1,6 +1,10 @@
 #pragma once
 #include <stdint.h>
 
+#define KDTREE_VERSION_MAJOR 0
+#define KDTREE_VERSION_MINOR 1
+#define KDTREE_VERSION_PATCH 0
+
 /* Will only work when KDTREE_DIM=3 unless modified */
 #define KDTREE_DIM 3
 

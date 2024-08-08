@@ -1,15 +1,16 @@
-# k-d tree but only 3D
+# k-d tree (but only the 3D case)
 
-[K-d trees](https://en.wikipedia.org/wiki/K-d_tree) are fun data
-structures that are useful for finding k-nearest neighbours and
-neighbours within some distance in point clouds. The can of course
-also be used to construct kernel density estimators. Although they can
-be implemented for high dimensions, the benefit compared to brute
-force drops quickly with the number of dimensions.
+The [K-d tree](https://en.wikipedia.org/wiki/K-d_tree) is a fun data
+structure, useful for finding k-nearest neighbours and neighbours
+within some distance in point clouds. The can of course also be used
+to construct kernel density estimators. Although they can be
+implemented for high dimensions, the benefit compared to brute force
+drops quickly with the number of dimensions as you can read on the
+Wiki page.
 
-This repo is used for some of my other projects and currently supports
-exactly what I need and nothing more. I'd be happy if anyone else finds
-it useful and can send me a bug report now and then, or even a pull
+This repo is used for some of my other projects and supports exactly
+what I need and nothing more. I'd be happy if anyone else finds it
+useful and can send me a bug report now and then, or even a pull
 request :)
 
 Not bullet tested, so please use something else for what is important!
@@ -43,8 +44,10 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
 ## Details
 - Data partitioning using Hoare's scheme, typically used in
   quicksort and quickselect.
+
 - For finding the k nearest neighbours the candidates are put in a
   priority queue, implemented by a binary heap.
+
 - The memory layout of the nodes has a big impact on performance and
   memory usage. The code in this repo use the
   [Eytzinger](https://arxiv.org/abs/1509.05053) layout, which is the
@@ -55,14 +58,16 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
   be, which means that the memory usage (for the tree, excluding the
   data points) will grow in steps of approximately 2 when the number
   of points passes some boundaries.
+
 - There is no parallel code for the tree construction at the moment,
   although that would be possible to do. `kdtree_query_radius` and
   `kdtree_kde` are thread safe. `kdtree_query_knn` is not tread safe
   but `kdtree_query_knn_multi` can be used to query multiple points in
   parallel.
-- Uses quickselect for median finding. Optionally GSL can be used for
-  this. Performance seems equal but I would trust the GSL library more
-  than my code in this case.
+
+- Uses quickselect to find the pivot point, i.e. not exacly the
+  median. Optionally GSL (`gsl_stats_median`) can be used for this
+  with a compile switch.
 
 ## Performance
 
@@ -105,8 +110,8 @@ N = 100,000,000
 
 
 
-For the python code, see `test_python.py`. Sklearn is proably built
-upon
+For the python code used in the test, see `test_python.py`. Sklearn is
+proably built upon
 [ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
 but that is just a hypothesis, not a fact.
 
@@ -114,7 +119,8 @@ but that is just a hypothesis, not a fact.
 - [ ] For N dimensions. Remove `#define KDTREE_DIM 3` and make it a
       parameter. Write tests and do the small adjustments needed.
 - [ ] Remove `<pthread.h>` from the main code for portability.
-- [ ] Also fix so that `kdtree_query_knn` is thread safe.
+- [ ] Also fix so that `kdtree_query_knn` is thread safe (via a query
+      object containing the per-thread data).
 
 ## Maybe
 - [Implicit](https://en.wikipedia.org/wiki/Implicit_k-d_tree)
