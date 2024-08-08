@@ -55,11 +55,17 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
   be, which means that the memory usage (for the tree, excluding the
   data points) will grow in steps of approximately 2 when the number
   of points passes some boundaries.
+- There is no parallel code for the tree construction at the
+  moment. `kdtree_query_radius` and `kdtree_kde` are thread
+  safe. `kdtree_query_knn` is not tread safe but
+  `kdtree_query_knn_multi` can be used to query multiple points in
+  parallel.
 
 ## Performance
 
 Finding the 5 nearest neighbours for each point among N=1,000. Only
-using one thread.
+using one thread. In this case "this" means `kdtree_query_knn` from
+this repo.
 
 | Software | Tree construction |  Query | Total time |  VmPeak |
 | -------- | ----------------- | ------ | ---------- | ------- |
