@@ -94,7 +94,7 @@ N=5000, k = 5
 
 | Software | Tree construction |  Query | Total time |  VmPeak |
 | -------- | ----------------- | ------ | ---------- | ------- |
-| this     |            1.3 ms | 4.9 s  |     6.2 ms |    4 MB |
+| this     |            0.8 ms | 4.6 s  |     5.4 ms |    4 MB |
 | sklearn  |            1.7 ms | 9.9 ms |    11.5 ms | 1504 MB |
 
 N=1,000,000, k = 5
@@ -112,7 +112,7 @@ N=1,000,000, **k = 100**
 | this     |            0.3 s  |17.2 s |     17.5 s |   87 MB |
 | sklearn  |            0.8 s  |35.8 s |     36.6 s | 4664 MB |
 
-N = 100,000,000
+N = 100,000,000, k = 5
 
 | Software | Tree construction | Query | Total time |   VmPeak |
 | -------- | ----------------- | ----- | ---------- | -------- |

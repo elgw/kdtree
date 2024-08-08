@@ -1,9 +1,5 @@
 #pragma once
-
-#include <assert.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
+#include <stddef.h>
 
 /** @brief quickselect
  * @param X the data points which will be scrambled

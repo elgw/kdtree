@@ -101,6 +101,7 @@ size_t * kdtree_query_knn_multi(kdtree_t * T,
                                 const double * Q, size_t nQ,
                                 int k, int ntheads);
 
+/* Find the index of the closest point */
 size_t kdtree_query_closest(kdtree_t * T, double * X);
 
 void node_print_bbx(const kdtree_node_t * N);
