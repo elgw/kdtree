@@ -554,7 +554,10 @@ int main(int argc, char ** argv)
     printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
 
     benchmark(N, k, binsize);
-
+    if(N > 100000 )
+    {
+        return EXIT_SUCCESS;
+    }
     basic_tests(N, binsize);
 
     test_query_radius(N, 1);

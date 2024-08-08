@@ -66,37 +66,50 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
 - Can use GSL (`gsl_stats_median`) to find the pivot or the provided
   quick select implementation.
 
-## Performance
+## Performance hints
 
-Finding the 5 nearest neighbours for each point among N=1,000. Only
-using one thread. In this case "this" means `kdtree_query_knn` from
-this repo.
+Only using one thread. In this case "this" means `kdtree_query_knn`
+from this repo.
+
+For reference, there are also results from
+`sklearn.neighbors.NearestNeighbors`, see `test_python.py` for the
+test code. Sklearn is probably an interface to
+[ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
+but that is just a hypothesis, not a fact. The comparison is not fair,
+as comparisons seldom are since the python code also stores the
+results (an Nxk matrix). And the memory measurement includes the whole
+Python environment, not just the algorithm and the associated data.
+
+Finding the k=5 nearest neighbours for each point among
+N=1,000.
+
 
 | Software | Tree construction |  Query | Total time |  VmPeak |
 | -------- | ----------------- | ------ | ---------- | ------- |
 | this     |            0.2 ms | 0.8 s  |     1.3 ms |    4 MB |
 | sklearn  |            0.5 ms | 1.8 ms |     2.4 ms | 1502 MB |
 
-N=5000
+N=5000, k = 5
 
 | Software | Tree construction |  Query | Total time |  VmPeak |
 | -------- | ----------------- | ------ | ---------- | ------- |
 | this     |            1.3 ms | 4.9 s  |     6.2 ms |    4 MB |
 | sklearn  |            1.7 ms | 9.9 ms |    11.5 ms | 1504 MB |
 
-N=1,000,000:
+N=1,000,000, k = 5
 
 | Software | Tree construction | Query | Total time |  VmPeak |
 | -------- | ----------------- | ----- | ---------- | ------- |
 | this     |             0.3 s | 2.0 s |      2.3 s |   87 MB |
 | sklearn  |             0.8 s | 5.8 s |      6.5 s | 1695 MB |
 
-N=10,000,000:
+
+N=1,000,000, **k = 100**
 
 | Software | Tree construction | Query | Total time |  VmPeak |
 | -------- | ----------------- | ----- | ---------- | ------- |
-| this     |               3 s |  37 s |       40 s |  792 MB |
-| sklearn  |              13 s |  80 s |       93 s | 3419 MB |
+| this     |            0.3 s  |17.2 s |     17.5 s |   87 MB |
+| sklearn  |            0.8 s  |35.8 s |     36.6 s | 4664 MB |
 
 N = 100,000,000
 
@@ -106,11 +119,6 @@ N = 100,000,000
 | sklearn  |             187 s | 968 s |     1155 s | 20580 MB |
 
 
-
-For the python code used in the test, see `test_python.py`. Sklearn is
-probably an interface to
-[ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
-but that is just a hypothesis, not a fact.
 
 ## Current validation steps
 
