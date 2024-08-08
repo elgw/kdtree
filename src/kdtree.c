@@ -353,6 +353,7 @@ kdtree_new(const double * X,
         double n_leafs = pow(2.0, ceil(log2(n_leafs0)));
         /* Then the number of nodes needed is */
         T->n_nodes_alloc = n_leafs*2-1;
+        T->n_nodes_alloc < 3 ? T->n_nodes_alloc = 3 : 0;
     }
     //T->n_nodes_alloc = 2*N;
     T->nodes = calloc(T->n_nodes_alloc, sizeof(kdtree_node_t));
@@ -611,6 +612,13 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
 
 size_t * kdtree_query_knn(kdtree_t * T, const double * Q, size_t k)
 {
+    if(k > T->n_points)
+    {
+        fprintf(stderr,
+                "kdtree_query_knn error: Impossible to call for %zu points when\n"
+                "there are only %zu in the tree\n", k, T->n_points);
+        return NULL;
+    }
     //    printf("-> Q = (%f, %f)\n", Q[0], Q[1]);
 
     // If k changed from the last query, update:

@@ -1,10 +1,21 @@
 # k-d tree but only 3D
 
 [K-d trees](https://en.wikipedia.org/wiki/K-d_tree) are fun data
-structures. Useful for finding k-nearest neighbours and neighbours
-within some distance in point clouds.
+structures that are useful for finding k-nearest neighbours and
+neighbours within some distance in point clouds. The can of course
+also be used to construct kernel density estimators. Although they can
+be implemented for high dimensions, the benefit compared to brute
+force drops quickly with the number of dimensions.
+
+This repo is used for some of my other projects and currently supports
+exactly what I need and nothing more. I'd be happy if anyone else finds
+it useful and can send me a bug report now and then, or even a pull
+request :)
+
+Not bullet tested, so please use something else for what is important!
 
 ## Usage
+Below are examples of the supported methods:
 
 ``` C++
 #include <kdtree.h>
@@ -26,11 +37,11 @@ double v = kdtree_kde(T, Q, sigma);
 kdtree_free(T);
 ```
 
-See `kdtree.h` for the complete function signatures and some
-documentation. Look in `kdtree_ut.c` for usage examples.
+see `kdtree.h` for the complete function signatures and some
+documentation. Look in `kdtree_ut.c` for complete usage examples.
 
-## Details:
-- Partitioning the data using Hoare's scheme, typically used in
+## Details
+- Data partitioning using Hoare's scheme, typically used in
   quicksort and quickselect.
 - For finding the k nearest neighbours the candidates are put in a
   priority queue, implemented by a binary heap.
@@ -42,17 +53,13 @@ documentation. Look in `kdtree_ut.c` for usage examples.
   side this give a good memory locality and fast queries. The major
   downside is that we need to decide upfront how deep the tree should
   be, which means that the memory usage (for the tree, excluding the
-  data points) will grow in steps of approximately 2.
-
-
-Supported operations:
-- k nearest neighbours
-- all points within some radius
-- KDE estimator with a Gaussian kernel.
+  data points) will grow in steps of approximately 2 when the number
+  of points passes some boundaries.
 
 ## Performance
 
-Finding the 5 nearest neighbours for each point among N=1,000
+Finding the 5 nearest neighbours for each point among N=1,000. Only
+using one thread.
 
 | Software | Tree construction |  Query | Total time |  VmPeak |
 | -------- | ----------------- | ------ | ---------- | ------- |
@@ -82,10 +89,17 @@ N = 100,000,000
 
 
 
-For the python code, see `test_python.py`. Most likely it is built upon [ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src).
+For the python code, see `test_python.py`. Sklearn is proably built
+upon
+[ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
+but that is just a hypothesis, not a fact.
 
 ## TODO
 - [ ] Remove the GSL dependency using my own median routine instead
+- [ ] For N dimensions. Remove `#define KDTREE_DIM 3` and make it a
+      parameter. Write tests and do the small adjustments needed.
+- [ ] Remove `<pthread.h>` from the main code for portability.
+- [ ] Also fix so that `kdtree_query_knn` is thread safe.
 
 ## Maybe
 - [Implicit](https://en.wikipedia.org/wiki/Implicit_k-d_tree)

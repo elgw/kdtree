@@ -472,7 +472,11 @@ void benchmark(size_t N, int k, int binsize)
         }
         double * Q = X+DIM*kk;
         size_t * knn = kdtree_query_knn(T, Q, k);
-        bool ok = is_radially_sorted(X, Q, knn, k);
+        bool ok = true;
+        if(knn != NULL)
+        {
+            ok = is_radially_sorted(X, Q, knn, k);
+        }
         bool all_ok = true;
         if(!ok)
         {
