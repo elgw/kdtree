@@ -61,6 +61,7 @@ Supported operations:
 Finding the 5 nearest neighbours for each point among N=10,000,000:
 
 | Software | Tree construction | Query | Total time | VmPeak |
+| --- | --- | --- | --- | --- | --- |
 | this     | 3 s| 34 s | 37 s | 795 MB |
 | sklearn    | 13 s | 80 s | 93 s | 3419 MB |
 
