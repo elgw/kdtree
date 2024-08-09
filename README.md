@@ -21,7 +21,7 @@ A few short notes:
 ## Usage
 Below are examples of the supported methods:
 
-``` C++
+``` C
 #include <kdtree.h>
 ...
 /* X: N 3D points [3 x N] */
@@ -73,16 +73,16 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
 
 ## Performance hints
 
-Only using one thread. In this case "this" means `kdtree_query_knn`
-from this repo.
+Only using one thread. The function `kdtree_query_knn` found here is
+denoted "this" in the table.
 
 For reference, there are also results from
 `sklearn.neighbors.NearestNeighbors`, see `test_python.py` for the
 test code. Sklearn is probably an interface to
 [ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
 but that is just a hypothesis, not a fact. The comparison is not fair,
-as comparisons seldom are, since the Python code stores the full
-results (an Nxk matrix) while that is discarded in my code. For
+comparisons seldom are, since the Python code stores the full
+result (an Nxk matrix) at the end, the code here does not. For
 sklearn, the memory measurement includes the whole Python environment,
 not just the algorithm and the associated data.
 
@@ -130,41 +130,43 @@ N = 100,000,000, k = 5
 More tests should be written. Especially to cover corner cases. The
 current test pack includes:
 
-- Should compile with zero warnings using `gcc -Wall -Wextra -pedantic
+- Compile with zero warnings using `gcc -Wall -Wextra -pedantic
   -std=gnu11 -g3 -fanalyzer`.
 - Passes the few tests in `kdtree_ut.c`, some of them are comparisons
   to brute force calculations.
-- **valgrind** finds no issues.
+- **valgrind** finds no issues when running `kdtree_ut`.
 
 ## Build/Install
 
-GNU Make:
-
-``` shell
-# Test program
-make kdtree_ut -B DEBUG=1
-# Shared library
-make libkdtree.so
-# Static library
-make libkdtree.a
-```
+Use the makefile to generate the test program, a shared or a static
+library.
 
 To include in your project with CMake, you could copy the files to a
-subfolder named `modules/` and then add something like this to your
-`CMakeLists.txt`
+subfolder, for example named `modules/`, and then add something like
+this to your `CMakeLists.txt`:
 
-``` shell
+``` CMake
   add_subdirectory("modules/kdtree/")
   target_include_directories(myAPP PUBLIC "modules/kdtree/include/")
   target_link_directories(myAPP PUBLIC "modules/kdtree/")
   target_link_libraries(myAPP kdtree)
 ```
 
-
-
 ## To Do
 - [ ] For N dimensions. Remove `#define KDTREE_DIM 3` and make it a
       parameter. Write tests and do the small adjustments needed.
-- [ ] Fix so that `kdtree_query_knn` is thread safe (via a query
-      object containing the per-thread data) or something similar.
+- [ ] Fix so that `kdtree_query_knn` is thread safe -- via a query
+      object containing the per-thread data?
 - [ ] More validation.
+
+## References
+
+To read:
+
+- [K-d tree page on Wikipedia](https://en.wikipedia.org/wiki/K-d_tree)
+- [Blog post: Color quantization, minimizing variance, and k-d trees](https://www.crisluengo.net/archives/932/)
+
+Implementations:
+
+- Python: [sklearn.neighbors.KDTree](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html)
+- Matlab: [knnsearch](https://se.mathworks.com/help/stats/knnsearch.html)
