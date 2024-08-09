@@ -16,6 +16,7 @@ request :)
 A few short notes:
 - No dependencies.
 - 46 kb when compiled as a static library.
+- Builds with gcc, clang and musl-gcc under linux.
 - Usual warnings applies, use with caution!
 
 ## Usage
@@ -87,15 +88,7 @@ sklearn, the memory measurement includes the whole Python environment,
 not just the algorithm and the associated data.
 
 Finding the k=5 nearest neighbours for each point among
-N=1,000.
-
-
-| Software | Tree construction |  Query | Total time |  VmPeak |
-| -------- | ----------------- | ------ | ---------- | ------- |
-| this     |            0.2 ms | 0.8 s  |     1.3 ms |    4 MB |
-| sklearn  |            0.5 ms | 1.8 ms |     2.4 ms | 1502 MB |
-
-N=5000, k = 5
+N=5,000.
 
 | Software | Tree construction |  Query | Total time |  VmPeak |
 | -------- | ----------------- | ------ | ---------- | ------- |
@@ -153,6 +146,7 @@ this to your `CMakeLists.txt`:
 ```
 
 ## To Do
+
 - [ ] For N dimensions. Remove `#define KDTREE_DIM 3` and make it a
       parameter. Write tests and do the small adjustments needed.
 - [ ] Fix so that `kdtree_query_knn` is thread safe -- via a query

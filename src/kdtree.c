@@ -475,15 +475,6 @@ int within_bounds(const kdtree_node_t * node, const double * Q, const double r)
     }
 }
 
-static inline double min(double a, double b)
-{
-    if(a<b)
-    {
-        return a;
-    }
-    return b;
-}
-
 static int bounds_overlap_ball_raw(const double * bbx,
                                    const double * Q,
                                    const double r2)

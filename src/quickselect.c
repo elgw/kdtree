@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #define max(x,y) (x>y ? x : y)
 #define min(x,y) (x<y ? x : y)
