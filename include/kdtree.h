@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 
 #define KDTREE_VERSION_MAJOR 0
 #define KDTREE_VERSION_MINOR 1
@@ -84,27 +85,35 @@ kdtree_query_radius(const kdtree_t * T,
                     const double radius,
                     size_t * nfound);
 
-/* TODO: Estimate the local density using a Gaussian symmetric kernel
-   with sigma. Esentially this calls kdtree_query_radius and applies
-   the KDE to the found points. */
+/* Estimate the local density using non-normalized Gaussian symmetric
+ * kernel with a fixed sigma.
+ *
+ * G(x, sigma) = exp(-x^2 / (2*sigma^2))
+ *
+ * For a custom kernel please use kdtree_query_radius and calculate
+ * the KDE based on the found points.
+ *
+ * Cutoff: will use points up to sigma*cutoff away from the query
+ * point Q. A default value will be used if cutoff <= 0.
+ */
 double
 kdtree_kde(const kdtree_t * T,
            const double * Q,
-           double sigma);
+           double sigma,
+           double cutoff);
 
-/* Query the nQ points in Q for the k nearest neighbors
- *
- * The returned matrix is kxN elements large and should be freed by
- * the caller.
- */
-size_t * kdtree_query_knn_multi(kdtree_t * T,
-                                const double * Q, size_t nQ,
-                                int k, int ntheads);
 
 /* Find the index of the closest point */
 size_t kdtree_query_closest(kdtree_t * T, double * X);
 
 void node_print_bbx(const kdtree_node_t * N);
+
+/* Make a shallow copy of a kd-tree for usage by another thread */
+kdtree_t * kdtree_copy_shallow(kdtree_t * );
+
+/* Free a tree returned from kdtree_copy_shallow */
+void kdtree_free_shallow(kdtree_t * T);
+
 
 /* Run some self-tests */
 void kdtree_validate(kdtree_t * T);

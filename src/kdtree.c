@@ -9,16 +9,13 @@
 #include <gsl/gsl_statistics_double.h>
 #endif
 
-#include <pthread.h>
-
-#include "../include/kdtree.h"
+#include "kdtree.h"
 #include "pqheap.h"
 #include "quickselect.h"
 
 #define XID_STRIDE (KDTREE_DIM + 1)
 
-// Make a shallow copy of a kd-tree for usage by another thread.
-static kdtree_t * kdtree_copy_shallow(kdtree_t * );
+
 
 /* Resolve the index of the right child based on the index of the
  * parent, following a Eytzinger scheme */
@@ -44,10 +41,20 @@ static int node_is_final(const kdtree_node_t * node)
     return (node->split_dim == KDTREE_DIM);
 }
 
-/*  Hoare's partition scheme
-    Adopted from arch/24/03/11_quickselect */
+/*  Hoare's partition scheme for vectors where the partitioning is
+ *  performed based on a single dimension or index.  Adopted from
+ *  arch/24/03/11_quickselect
+ *
+ * X : the data of size [XID_STRIDE x n] which will be partitioned.
+ *
+ * vim: the index or dimension of the pivot
+ *
+ * Returns:
+ * nLow: the number of vectors where v[vdim] <= pivot
+ * nHigh: the number of vectors where v[vdim] > pivot
+ */
 static void
-partition(double * restrict X,
+partition_vectors(double * restrict X,
           const size_t n, /* Number of points */
           const size_t vdim, /* Dimension to take value from */
           const double pivot,
@@ -117,6 +124,10 @@ node_print_bbx(const kdtree_node_t * N)
 
 void kdtree_free(kdtree_t * T)
 {
+    if(T == NULL)
+    {
+        return;
+    }
     free(T->XID);
     T->XID = NULL;
     free(T->nodes);
@@ -131,7 +142,7 @@ void kdtree_free(kdtree_t * T)
     return;
 }
 
-static kdtree_t * kdtree_copy_shallow(kdtree_t * _T)
+kdtree_t * kdtree_copy_shallow(kdtree_t * _T)
 {
     assert(_T != NULL);
     if(_T == NULL)
@@ -145,7 +156,7 @@ static kdtree_t * kdtree_copy_shallow(kdtree_t * _T)
     return T;
 }
 
-static void kdtree_free_shallow(kdtree_t * T)
+void kdtree_free_shallow(kdtree_t * T)
 {
     pqheap_free(&T->pq);
     free(T->result);
@@ -284,7 +295,7 @@ kdtree_split(kdtree_t * T,
 
 
     assert(XID[KDTREE_DIM] < T->n_points);
-    partition(XID, node->n_points, split_dim, pivot, &nLow, &nHigh);
+    partition_vectors(XID, node->n_points, split_dim, pivot, &nLow, &nHigh);
 
     {
         size_t left_id = node_left_child_id(node_id);
@@ -679,78 +690,6 @@ size_t * kdtree_query_knn(kdtree_t * T, const double * Q, size_t k)
     return T->result;
 }
 
-// Struct for parallel queries
-typedef struct{
-    kdtree_t * T;
-    const double * Q;
-    size_t nQ;
-    int k;
-    int thread;
-    int nthreads;
-    size_t * KNN;
-} _p_query_t;
-
-void * _p_query(void * _config)
-{
-    _p_query_t * config = (_p_query_t *) _config;
-    kdtree_t * T = config->T;
-
-    const double * Q = config->Q;
-    const size_t nQ = config->nQ;
-    const int k = config->k;
-    const int thread = config->thread;
-    const int nthreads = config->nthreads;
-    size_t * KNN = config->KNN;
-    for(size_t kk = thread; kk<nQ; kk+=nthreads)
-    {
-        size_t * knn = kdtree_query_knn(T, Q+2*kk, k);
-        memcpy(KNN + k*kk, knn, k*sizeof(size_t));
-    }
-    return NULL;
-}
-
-size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k, int nthreads)
-{
-    size_t * KNN = calloc(nQ*k, sizeof(size_t));
-    assert(KNN != NULL);
-
-    if(nthreads == 1)
-    {
-        for(size_t kk = 0; kk<nQ; kk++)
-        {
-            size_t * knn = kdtree_query_knn(T, Q+2*kk, k);
-            memcpy(KNN + k*kk, knn, k*sizeof(size_t));
-        }
-        return KNN;
-    } else {
-        pthread_t * threads = calloc(nthreads, sizeof(pthread_t));
-        assert(threads != NULL);
-        _p_query_t * confs = calloc(nthreads, sizeof(_p_query_t));
-        assert(confs != NULL);
-
-        for(int kk = 0; kk<nthreads; kk++)
-        {
-            confs[kk].T = kdtree_copy_shallow(T);
-            confs[kk].thread = kk;
-            confs[kk].nthreads = nthreads;
-            confs[kk].KNN = KNN;
-            confs[kk].k = k;
-            confs[kk].Q = Q;
-            confs[kk].nQ = nQ;
-            pthread_create(&threads[kk], NULL, _p_query, (void *) &confs[kk]);
-        }
-
-        for(int kk = 0; kk<nthreads; kk++)
-        {
-            pthread_join(threads[kk], NULL);
-            kdtree_free_shallow(confs[kk].T);
-        }
-        free(confs);
-        free(threads);
-    }
-
-    return KNN;
-}
 
 void kdtree_validate(kdtree_t * T)
 {
@@ -885,16 +824,18 @@ kdtree_query_radius(const kdtree_t * T,
     return result;
 }
 
-static double gaussian(double d2, double sigma)
+static double gaussian(double d2, double sigma22)
 {
-    return exp(-d2/sigma);
+    // sigma22 = 2*sigma^2
+    // d2 = d^2
+    return exp(-d2/sigma22);
 }
 
 static double _kdtree_kde(const kdtree_t * T,
                           const double * Q,
                           size_t node_id,
                           const double r2,
-                          const double sigma)
+                          const double sigma22)
 {
     kdtree_node_t * node = T->nodes + node_id;
     if( ! bounds_overlap_ball_raw(node->bbx, Q, r2) )
@@ -911,7 +852,7 @@ static double _kdtree_kde(const kdtree_t * T,
         for(size_t kk = 0; kk < node->n_points; kk++)
         {
             double d2 = eudist_sq(X + kk*XID_STRIDE, Q);
-            kde += gaussian(d2, sigma);
+            kde += gaussian(d2, sigma22);
         }
         return kde;
     }
@@ -924,20 +865,29 @@ static double _kdtree_kde(const kdtree_t * T,
 
     kde += _kdtree_kde(T, Q,
                        node_left_child_id(node_id),
-                       r2, sigma);
+                       r2, sigma22);
 
     kde += _kdtree_kde(T, Q,
                        node_right_child_id(node_id),
-                       r2, sigma);
+                       r2, sigma22);
 
     return kde;
 }
 
 
-double kdtree_kde(const kdtree_t * T, const double * Q, const double sigma)
+double kdtree_kde(const kdtree_t * T,
+                  const double * Q,
+                  const double sigma,
+                  const double cutoff)
 {
+    /* How distant points are of interest for the given sigma value ?
+     */
     double r = 2.5*sigma;
-    return _kdtree_kde(T, Q, 0, pow(r,2.0), sigma);
+    if(cutoff > 0.0)
+    {
+        r = cutoff*sigma;
+    }
+    return _kdtree_kde(T, Q, 0, pow(r,2.0), 2.0*pow(sigma, 2.0));
 }
 
 void kdtree_print_info(kdtree_t * T)

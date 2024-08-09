@@ -1,5 +1,7 @@
 # k-d tree (but only the 3D case)
 
+Version 0.1.0 2024-08-09.
+
 The [K-d tree](https://en.wikipedia.org/wiki/K-d_tree) is a fun data
 structure, useful for finding k-nearest neighbours and neighbours
 within some distance in point clouds. The benefits it provides
@@ -11,7 +13,10 @@ functionality is quite minimal. I'd be happy if anyone else finds it
 useful and can send me a bug report now and then, or even a pull
 request :)
 
-Usual warnings applies, use with caution!
+A few short notes:
+- No dependencies.
+- 46 kb when compiled as a static library.
+- Usual warnings applies, use with caution!
 
 ## Usage
 Below are examples of the supported methods:
@@ -131,10 +136,35 @@ current test pack includes:
   to brute force calculations.
 - **valgrind** finds no issues.
 
+## Build/Install
+
+GNU Make:
+
+``` shell
+# Test program
+make kdtree_ut -B DEBUG=1
+# Shared library
+make libkdtree.so
+# Static library
+make libkdtree.a
+```
+
+To include in your project with CMake, you could copy the files to a
+subfolder named `modules/` and then add something like this to your
+`CMakeLists.txt`
+
+``` shell
+  add_subdirectory("modules/kdtree/")
+  target_include_directories(myAPP PUBLIC "modules/kdtree/include/")
+  target_link_directories(myAPP PUBLIC "modules/kdtree/")
+  target_link_libraries(myAPP kdtree)
+```
+
+
+
 ## To Do
 - [ ] For N dimensions. Remove `#define KDTREE_DIM 3` and make it a
       parameter. Write tests and do the small adjustments needed.
-- [ ] Remove `<pthread.h>` from the main code for portability.
-- [ ] Also fix so that `kdtree_query_knn` is thread safe (via a query
-      object containing the per-thread data).
+- [ ] Fix so that `kdtree_query_knn` is thread safe (via a query
+      object containing the per-thread data) or something similar.
 - [ ] More validation.

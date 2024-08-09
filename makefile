@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-Wall -Wextra -pedantic -std=gnu11
+CFLAGS=-Wall -Wextra -pedantic -std=gnu11 -Iinclude/
 LDFLAGS=-lm -lpthread
 
 GSL?=0
@@ -28,6 +28,10 @@ SRC=src/kdtree.c src/pqheap.c src/quickselect.c
 
 kdtree_ut: $(SRC) src/kdtree_ut.c makefile
 	$(CC) $(CFLAGS) $(SRC) src/kdtree_ut.c $(LDFLAGS) -o kdtree_ut
+
+libkdtree.a: $(SRCFILES) makefile
+	$(CC) -c $(CFLAGS) $(SRC) $(LDFLAGS)
+	ar rcs libkdtree.a kdtree.o
 
 
 libkdtree.so: $(SRCFILES) makefile
