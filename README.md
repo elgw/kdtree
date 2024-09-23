@@ -131,8 +131,17 @@ current test pack includes:
 
 ## Build/Install
 
-Use the makefile to generate the test program, a shared or a static
-library.
+Use the makefile to generate the test program.
+
+To build and install the library, please use
+
+``` shell
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
+```
 
 To include in your project with CMake, you could copy the files to a
 subfolder, for example named `modules/`, and then add something like
