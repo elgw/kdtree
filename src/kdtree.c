@@ -339,7 +339,7 @@ kdtree_new(const double * X,
 
     if(max_leaf_size < 1)
     {
-        printf("kdtree_new: invalid bin size\n");
+        printf("kdtree_new: invalid bin size, use for example 10\n");
         return NULL;
     }
 
@@ -843,6 +843,7 @@ static double _kdtree_kde(const kdtree_t * T,
         for(size_t kk = 0; kk < node->n_points; kk++)
         {
             double d2 = eudist_sq(X + kk*XID_STRIDE, Q);
+            // Possibly check r2 criteria here
             kde += gaussian(d2, sigma22);
         }
         return kde;
