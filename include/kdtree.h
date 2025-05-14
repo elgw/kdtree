@@ -123,6 +123,20 @@ kdtree_kde(const kdtree_t * T,
            double sigma,
            double cutoff);
 
+/* Calculate the weighted mean position of a Gaussian KDE at the point
+ * Q as the following sum over all the neighbors
+ *
+ * m(x) = \frac{ \sum K(x_i-x) x_i }{\sum K(x_i -x)}
+ *
+ * returns: m -- the weighted mean position. Will be Q if no neighbours found.
+ */
+void
+kdtree_kde_mean(const kdtree_t *,
+                const double * Q,
+                double sigma,
+                double cutoff,
+                double * mean);
+
 /* Wanted: Expectation Maximization (EM) with Gaussian Mixture Model (GMM)
 void kdtree_emgmm(const kdtree_t * T,
 const gaussian ** G0,

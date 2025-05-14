@@ -1,6 +1,6 @@
 # k-d tree (but only the 3D case)
 
-Version 0.1.0 2024-08-09.
+Version 0.1.1 2025-05-14.
 
 The [K-d tree](https://en.wikipedia.org/wiki/K-d_tree) is a fun data
 structure, useful for finding k-nearest neighbours and neighbours
@@ -161,6 +161,12 @@ this to your `CMakeLists.txt`:
 - [ ] Fix so that `kdtree_query_knn` is thread safe -- via a query
       object containing the per-thread data?
 - [ ] More validation.
+
+## Changelog
+
+- 0.1.1, 2025-04-05, added `kdtree_kde_mean` for mean shift algorithms.
+
+- 0.1.0 2024-08-09.
 
 ## References
 

@@ -169,7 +169,11 @@ double * rand_points(size_t N)
 
 static double eudist3(const double * A, const double * B)
 {
-    return sqrt(pow(A[0]-B[0],2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2));
+    return sqrt(
+        pow(A[0]-B[0], 2) +
+        pow(A[1]-B[1], 2) +
+        pow(A[2]-B[2], 2)
+        );
 }
 
 static double timespec_diff(struct timespec* end, struct timespec * start)
@@ -384,9 +388,83 @@ void basic_tests(size_t N, int max_leaf_size)
            idx[0], idx[1], idx[2], idx[3], idx[4]);
     free(X); X = NULL;
     kdtree_free(T); T = NULL;
+}
+
+void kde_mean_ref(const double * X,
+                  size_t N,
+                  const double * Q,
+                  double sigma,
+                  double * mean_ref)
+{
+    double xmeank[3] = {0};
+    double meank = 0;
+    for(size_t kk = 0; kk < N; kk++)
+    {
+        double r = eudist3(X+3*kk, Q);
+        double k = exp(-r*r/(2.0*sigma*sigma));
+        //printf("r = %f, k = %f\n", r, k);
+        meank += k;
+        for(int ll = 0; ll < 3; ll++)
+        {
+            xmeank[ll] += k*X[3*kk + ll];
+        }
+    }
+    //printf("meank = %f ", meank);
+    for(int ll = 0; ll < 3; ll++)
+    {
+        mean_ref[ll] = xmeank[ll] / meank;
+    }
+}
+
+void test_kdtree_kde_mean(size_t N, int max_leaf_size)
+{
+    printf("\n--> test_kdtree_kde_mean(N=%zu, max_leaf_size=%d)\n",
+           N, max_leaf_size);
+    double * X = rand_points(N);
+
+
+    kdtree_t * T = kdtree_new(X, N, max_leaf_size);
+    if(T == NULL)
+    {
+        printf("Could not construct a kd-tree\n");
+        exit(EXIT_FAILURE);
+    }
+
+    double sigma = 200.0;
+
+    for(int kk = 0; kk < (int) N; kk++)
+    {
+        double mean[3] = {0};
+        double * Q = X + kk*3;
+        kdtree_kde_mean(T, Q, sigma, 0, mean);
+
+        double mean_ref[3] = {0};
+        kde_mean_ref(X, N, Q, sigma, mean_ref);
+
+        double err = fabs(eudist3(mean, mean_ref));
+        if(err > 1e-4)
+        {
+            printf("Q = [%f, %f, %f] ", Q[0], Q[1], Q[2]);
+            printf("mu = [%f, %f, %f] ", mean[0], mean[1], mean[2]);
+            printf("ref = [%f, %f, %f]\n", mean_ref[0], mean_ref[1], mean_ref[2]);
+            printf("abs err=%f\n", err);
+            printf("Failure\n");
+            exit(EXIT_FAILURE);
+        }
+
+    }
+
+
+
+    kdtree_free(T); T = NULL;
+    printf("done\n");
+
+    free(X); X= NULL;
+    kdtree_free(T); T = NULL;
 
 
 }
+
 
 void print_query_and_result(const double * X,
                        const double * Q,
@@ -682,14 +760,14 @@ int main(int argc, char ** argv)
 
     basic_tests(N, binsize);
 
+    test_kdtree_kde_mean(N, binsize);
+
     benchmark(N, k, binsize);
 
     if(N > 100000 )
     {
         return EXIT_SUCCESS;
     }
-
-
 
     test_query_radius(N, 1);
     test_query_radius(N, 10);
@@ -698,6 +776,7 @@ int main(int argc, char ** argv)
     test_align_dots(5000);
 
     test_threads(N, k, binsize);
+
 
 
 
