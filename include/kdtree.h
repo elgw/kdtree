@@ -129,7 +129,13 @@ kdtree_kde(const kdtree_t * T,
  * m(x) = \frac{ \sum K(x_i-x) x_i }{\sum K(x_i -x)}
  *
  * returns: m -- the weighted mean position. Will be Q if no neighbours found.
+ *
+ * This is an ingredient of the mean shift algorithm. Please not that
+ * using a Gaussian kernel a quite large radius contributes to the
+ * kde, set cutoff to you liking. A cutoff of 0 means that it will be
+ * set automagically.
  */
+
 void
 kdtree_kde_mean(const kdtree_t *,
                 const double * Q,
@@ -144,14 +150,6 @@ gaussian ** Gfinal);
  */
 
 
-/* Wanted: Weighted mean of the Gaussian kernel. An ingredient of the
- * mean shift algorithm
-void kdtree_kde_wm(const kdtree_t * T,
-                   const double * Q,
-                   double sigma,
-                   double cutoff,
-                   double * M);
-*/
 
 /* Find the index of the closest point */
 size_t kdtree_query_closest(kdtree_t * T, double * X);
