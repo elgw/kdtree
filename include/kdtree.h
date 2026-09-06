@@ -13,7 +13,6 @@
  * link with -kdtree -lm
  */
 
-
 #include <stdint.h>
 #include <stddef.h>
 
@@ -67,7 +66,7 @@ typedef struct{
     double * median_buffer;
 
     /* State variables for queries */
-    struct pqheap * pq; // needs to be here?
+    struct pqheap * pq; // used for k-nearest queries
     int direct_path;
     /* The latest query is stored internally to avoid an abundant
        number of malloc/free. Can of course be copied by the caller. */
@@ -101,7 +100,7 @@ kdtree_query_knn(kdtree_t * T,
                  const double * Q,
                  size_t k);
 
-/* TODO
+/*
  * Find all points within some radius of Q
  * Returns a newly allocated array of indexes of length nfound
  * On failure: Returns NULL and sets nfound to 0
@@ -156,7 +155,6 @@ gaussian ** Gfinal);
  */
 
 
-
 /* Find the index of the closest point */
 PUB size_t kdtree_query_closest(kdtree_t * T, double * X);
 
@@ -168,8 +166,22 @@ PUB kdtree_t * kdtree_copy_shallow(kdtree_t * );
 /* Free a tree returned from kdtree_copy_shallow */
 PUB void kdtree_free_shallow(kdtree_t * T);
 
-
 /* Run some self-tests */
 PUB void kdtree_validate(kdtree_t * T);
 
 PUB void kdtree_print_info(kdtree_t * T);
+
+// TODO
+// Perform a all-vs-all collision test to detect points that
+// are withing radius distance from each other.
+//
+// In the callback function, u and v refer to the points of
+// the array used to construct the tree, i.e.,
+// double * point_u = X + 3*u;
+// double * point_v = X + 3*v;
+// The callback is only called once per pair, i.e., if it
+// is called with pair of indexes, (u,v), then it will not be called with
+// (v, u). It will not be called for self collisions, i.e. u!=v.
+typedef void (*kdtree_collide_cb)(uint32_t u, uint32_t v, void * data);
+PUB void kdtree_collide(const kdtree_t * T, double radius,
+                        kdtree_collide_cb cb, void * cb_data);

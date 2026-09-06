@@ -9,6 +9,12 @@
 #include "kdtree.h"
 #include "pqheap.h"
 
+typedef double fxx;
+typedef int8_t i8;
+typedef int32_t i32;
+typedef uint32_t u32;
+typedef uint64_t u64;
+
 #define DIM 3
 
 // Struct for parallel queries
@@ -167,13 +173,19 @@ double * rand_points(size_t N)
     return X;
 }
 
-static double eudist3(const double * A, const double * B)
+static double
+eudist3_sq(const double * A, const double * B)
 {
-    return sqrt(
-        pow(A[0]-B[0], 2) +
+    return pow(A[0]-B[0], 2) +
         pow(A[1]-B[1], 2) +
-        pow(A[2]-B[2], 2)
-        );
+        pow(A[2]-B[2], 2);
+
+}
+
+static double
+eudist3(const double * A, const double * B)
+{
+    return sqrt(eudist3_sq(A, B));
 }
 
 static double timespec_diff(struct timespec* end, struct timespec * start)
@@ -645,6 +657,202 @@ void test_query_radius(size_t N, double radius)
     return;
 }
 
+// A number in [-1, 1]
+static fxx inbox(void)
+{
+    return 2*(0.5 -((fxx) rand() / (fxx) RAND_MAX));
+}
+
+// n 3D points in [-1, 1]^3
+static fxx * random_points(u32 n)
+{
+    fxx * X = malloc(3*n*sizeof(fxx));
+    assert(X != NULL);
+    for(u32 kk = 0; kk < 3*n; kk++) {
+        X[kk] = inbox();
+    }
+    return X;
+}
+
+// See the correct collisions are found
+// using kdtree_query_radius
+void test_kdtree_query_radius_vs_bf(size_t N, __attribute__((unused)) double vq)
+{
+    printf("test_collision(%zu, %f)\n", N, vq);
+    fxx * X = random_points(N);
+    assert(X != NULL);
+    fxx radius = 2.0/cbrt(N);
+    fxx radius2 = radius*radius;
+    kdtree_t * T = kdtree_new(X, N, 5);
+    if(T == NULL) {
+        free(X);
+        return;
+    }
+    assert(T != NULL);
+
+    i8 * C = calloc(N, sizeof(i8));
+    i8 * C2 = calloc(N, sizeof(i8));
+    u64 n_found_total = 0;
+    for(u32 kk = 0; kk < N; kk++) {
+
+        for(u32 ll = 0; ll < N; ll++) {
+            C[ll] = eudist3_sq(X+3*kk, X+3*ll) < radius2;
+        }
+        memset(C2, 0, N);
+        size_t n_found;
+        size_t * result = kdtree_query_radius(T, X+3*kk, radius, &n_found);
+        for(size_t ll = 0; ll < n_found; ll++){
+            C2[result[ll]] = 1;
+            n_found_total++;
+        }
+        free(result);
+        for(u32 ll = 0; ll < N; ll++) {
+            if(C[ll] != C2[ll]) {
+                printf("[%f, %f, %f] vs [%f, %f, %f]\n",
+                       X[3*kk], X[3*kk+1], X[3*kk+2],
+                       X[3*ll], X[3*ll+1], X[3*ll+2]);
+                printf("distance = %f, bf=%d, kdtree=%d\n",
+                       eudist3(X+3*kk, X+3*ll), C[ll], C2[ll]);
+                printf("test_collision failed\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    printf("Found %lu collisions, everything matches brute force\n", n_found_total);
+    kdtree_free(T);
+    free(C);
+    free(C2);
+    free(X);
+}
+
+typedef struct {
+    i8 * C;
+    size_t N;
+} cb1_struct;
+
+typedef struct {
+    size_t N;
+} cb2_struct;
+
+
+void test_cb1(u32 u, u32 v, void* _data){
+    cb1_struct * data = (cb1_struct*) _data;
+    //printf("collisions? (%u, %u)\n", u, v);
+    if(u > v){ u32 t = v; v = u; u = t;}
+    data->C[u + data->N*v]++;
+}
+
+void test_cb2(__attribute__((unused)) u32 u,
+              __attribute__((unused)) u32 v,
+              void* _data){
+    cb2_struct * data = (cb2_struct*) _data;
+    data->N++;
+}
+
+
+void test_kdtree_collide(size_t N)
+{
+    printf("test_kdtree_collide(%zu)\n", N);
+    fxx * X = random_points(N);
+    assert(X != NULL);
+    fxx radius = 2.0/cbrt(N);
+    fxx radius2 = radius*radius;
+
+    i8 * C1 = calloc(N*N, sizeof(i8));
+    i8 * C2 = calloc(N*N, sizeof(i8));
+    u64 nC1 = 0;
+    for(u32 kk = 0; kk < N; kk++) {
+        for(u32 ll = kk+1; ll < N; ll++) {
+            C1[kk + N*ll] = eudist3_sq(X+3*kk, X+3*ll) < radius2;
+            nC1 += C1[kk + N*ll];
+        }
+    }
+
+    struct timespec t0, t1, t2, t3;;
+    clock_gettime(CLOCK_REALTIME, &t0);
+    kdtree_t * T = kdtree_new(X, N, 5);
+    clock_gettime(CLOCK_REALTIME, &t1);
+    if(T == NULL) {
+        free(X);
+        free(C1);
+        free(C2);
+        return;
+    }
+
+    assert(T != NULL);
+    cb1_struct cb_data = {};
+    cb_data.N = N;
+    cb_data.C = C2;
+
+    clock_gettime(CLOCK_REALTIME, &t2);
+    kdtree_collide(T, radius, test_cb1, (void*) &cb_data);
+    clock_gettime(CLOCK_REALTIME, &t3);
+
+    u64 nC2 = 0;
+    for(u32 kk = 0; kk < N; kk++) {
+        for(u32 ll = kk+1; ll < N; ll++) {
+            nC2 += C2[kk + N*ll];
+        }
+    }
+    printf("nC2 = %lu\n", nC2);
+
+    // validate
+    for(u32 kk = 0; kk < N; kk++) {
+        for(u32 ll = kk+1; ll < N; ll++) {
+            if(C1[kk+N*ll] != C2[kk+N*ll]) {
+                printf("[%f, %f, %f] vs [%f, %f, %f]\n",
+                       X[3*kk], X[3*kk+1], X[3*kk+2],
+                       X[3*ll], X[3*ll+1], X[3*ll+2]);
+                printf("distance = %f, bf=%d, kdtree=%d\n",
+                       eudist3(X+3*kk, X+3*ll), C1[ll], C2[ll]);
+                printf("test_collision failed\n");
+                printf("query radius=%f\n", radius);
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+    printf("Found %lu collisions, everything matches brute force\n", nC1);
+    kdtree_free(T);
+    free(C1);
+    free(C2);
+    free(X);
+    printf("construct : %.3f [ms]\n", 1000.0*timespec_diff(&t1, &t0));
+    printf("query     : %.3f [ms]\n", 1000.0*timespec_diff(&t3, &t2));
+}
+
+void benchmark_kdtree_collide(size_t N)
+{
+    printf("test_kdtree_collide(%zu)\n", N);
+    fxx * X = random_points(N);
+    assert(X != NULL);
+    fxx radius = 2.0/cbrt(N);
+
+    struct timespec t0, t1, t2, t3;;
+    clock_gettime(CLOCK_REALTIME, &t0);
+    kdtree_t * T = kdtree_new(X, N, 5);
+    clock_gettime(CLOCK_REALTIME, &t1);
+    if(T == NULL) {
+        free(X);
+        return;
+    }
+
+    assert(T != NULL);
+    cb2_struct cb_data = {};
+    cb_data.N = 0;
+
+
+    clock_gettime(CLOCK_REALTIME, &t2);
+    kdtree_collide(T, radius, test_cb2, (void*) &cb_data);
+    clock_gettime(CLOCK_REALTIME, &t3);
+
+    kdtree_free(T);
+    free(X);
+    printf("construct : %.3f [ms]\n", 1000.0*timespec_diff(&t1, &t0));
+    printf("query     : %.3f [ms]\n", 1000.0*timespec_diff(&t3, &t2));
+    return;
+}
+
+
 void benchmark(size_t N, int k, int binsize)
 {
     printf("\n--> benchmark(N=%zu, k=%d, binsize=%d)\n",
@@ -743,6 +951,9 @@ int main(int argc, char ** argv)
 {
     srand((unsigned) time(NULL));
 
+    benchmark_kdtree_collide(10000);
+
+
     size_t N = 1000;
     int k = 5;
     int binsize = 20;
@@ -760,6 +971,10 @@ int main(int argc, char ** argv)
     }
     printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
 
+    test_kdtree_query_radius_vs_bf(123, 0);
+
+    test_kdtree_query_radius_vs_bf(1000, 0);
+    test_kdtree_query_radius_vs_bf(1234, 0);
     basic_tests(N, binsize);
 
     test_kdtree_kde_mean(N, binsize);

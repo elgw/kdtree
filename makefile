@@ -10,10 +10,17 @@ CFLAGS+=`pkg-config gsl --cflags` -DGSL
 LDFLAGS+=`pkg-config gsl --libs`
 endif
 
+SAN?=0
 DEBUG?=0
 
+ifeq ($(SAN),1)
+CFLAGS+=-fsanitize=address
+DEBUG=1
+endif
+
+
 ifeq ($(DEBUG),1)
-CFLAGS+=-g3
+CFLAGS+=-g3 -Og
 else
 CFLAGS+=-O3 -DNDEBUG
 LDFLAGS+=-flto

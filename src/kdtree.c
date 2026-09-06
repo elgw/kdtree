@@ -15,16 +15,19 @@
 
 #define XID_STRIDE (KDTREE_DIM + 1)
 
+typedef int64_t i64;
+typedef uint32_t u32;
 
-
-/* Resolve the index of the right child based on the index of the
- * parent, following a Eytzinger scheme */
-static size_t node_right_child_id(size_t node_id)
+// Resolve the index of the right child based on the index of the
+// parent, following a Eytzinger scheme
+static size_t
+node_right_child_id(size_t node_id)
 {
     return 2*node_id+2;
 }
 
-static size_t node_left_child_id(size_t node_id)
+static size_t
+node_left_child_id(size_t node_id)
 {
     return 2*node_id+1;
 }
@@ -164,23 +167,16 @@ void kdtree_free_shallow(kdtree_t * T)
     return;
 }
 
-/* Euclidean distance squared */
-static double eudist_sq(const double * A, const double * B)
+// Euclidean distance squared
+static double
+eudist_sq(const double * A, const double * B)
 {
     double sum = 0;
-    for(size_t ii = 0; ii<KDTREE_DIM; ii++)
-    {
+    for(size_t ii = 0; ii<KDTREE_DIM; ii++) {
         sum+=pow(A[ii]-B[ii], 2);
     }
     return sum;
 }
-
-
-static double eudist(const double * A, const double * B)
-{
-    return sqrt(eudist_sq(A, B));
-}
-
 
 double get_median_from_strided(const double * X, // data
                                size_t N, // number of points
@@ -429,11 +425,9 @@ size_t kdtree_query_closest(kdtree_t * T, double * X)
 {
 
     kdtree_node_t * N = T->nodes;
-    while( ! node_is_final(N) )
-    {
+    while( ! node_is_final(N) ){
         int split_dim = N->split_dim;
-        if(X[split_dim] > N->pivot)
-        {
+        if(X[split_dim] > N->pivot){
             N = T->nodes + node_right_child_id(N->id);
         } else {
             N = T->nodes+ + node_left_child_id(N->id);
@@ -441,26 +435,26 @@ size_t kdtree_query_closest(kdtree_t * T, double * X)
     }
 
     double * NX = T->XID + N->data_idx;
-    double dmin = eudist(X, NX);
+    double dmin2 = eudist_sq(X, NX);
     size_t imin = NX[KDTREE_DIM]; // N->idx[0];
-    for(size_t kk = 0; kk<N->n_points; kk++)
-    {
-        double d = eudist(X, NX + kk*(KDTREE_DIM+1));
-        if(d < dmin)
-        {
+    for(size_t kk = 0; kk<N->n_points; kk++){
+        double d2 = eudist_sq(X, NX + kk*(KDTREE_DIM+1));
+        if(d2 < dmin2){
             imin = NX[kk*(KDTREE_DIM+1) + KDTREE_DIM]; // ->idx[kk];
-            dmin = d;
+            dmin2 = d2;
         }
     }
-    assert(dmin < 1e-9);
+    assert(dmin2 < 1e-9);
     return imin;
 }
 
-int within_bounds(const kdtree_node_t * node, const double * Q, const double r)
+// Return 1 if the disk centered at Q
+// with radius r is FULLY inside the node bounding box
+// else 0
+static int
+within_bounds(const kdtree_node_t * node, const double * Q, const double r)
 {
-    // Return 1 if the disk centered at Q
-    // with radius r is inside the node
-    // else 0
+
     const double x = Q[0];
     const double y = Q[1];
     const double z = Q[2];
@@ -470,55 +464,25 @@ int within_bounds(const kdtree_node_t * node, const double * Q, const double r)
     {
         return 0;
     } else {
-        //   printf("(%f, %f), r=%f is within [%f, %f, %f, %f]\n", x, y, r,
-        //     node->xmin, node->xmax, node->ymin, node->ymax);
         return 1;
     }
 }
 
-static int bounds_overlap_ball_raw(const double * bbx,
-                                   const double * Q,
-                                   const double r2)
+// See if the axis aligned bounding box bbx overlaps the sphere centered at S
+// and with a squared radius of r2.
+static int
+aa_box_hit_sphere_test(const double * restrict bbx,
+                       const double * restrict S,
+                       const double r2)
 {
-    // find nearest x and nearest y
-    double nx = 0;
-    double ny = 0;
-    double nz = 0;
-    const double x = Q[0];
-    const double y = Q[1];
-    const double z = Q[2];
-
-    if( x < bbx[0])
-    {
-        nx = bbx[0] - x;
-    } else if (x > bbx[1])
-    {
-        nx = x - bbx[1];
+    // Will eventually be the point in the bbx which is closest to
+    // the sphere
+    double B[3] = {S[0], S[1], S[2]};
+    for(int dd = 0; dd < 3; dd++){
+        B[dd] < bbx[2*dd] ? B[dd] = bbx[2*dd] : 0;
+        B[dd] > bbx[2*dd+1] ? B[dd] = bbx[2*dd+1] : 0;
     }
-
-    if( y < bbx[2])
-    {
-        nx = bbx[2] - y;
-    } else if (y > bbx[3])
-    {
-        ny = y - bbx[3];
-    }
-
-    if( z < bbx[4])
-    {
-        nz = bbx[4] - z;
-    } else if (z > bbx[5])
-    {
-        nz = z - bbx[5];
-    }
-
-    if(pow(nx, 2) + pow(ny, 2) + pow(nz, 2) < r2)
-    {
-        return 1;
-    }
-
-    return 0;
-
+    return eudist_sq(S, B) <= r2;
 }
 
 static int
@@ -528,7 +492,8 @@ bounds_overlap_ball(const kdtree_t * T,
 {
 
     const double rmax = pqheap_get_max_value(T->pq);
-    return bounds_overlap_ball_raw(node->bbx, Q, rmax);
+    return aa_box_hit_sphere_test(node->bbx, Q, rmax);
+    //return bounds_overlap_ball_raw(node->bbx, Q, rmax);
 }
 
 /* Recursive search until no more points can be found
@@ -760,7 +725,7 @@ static void _kdtree_query_radius(const kdtree_t * T,
                                  struct darray * res)
 {
     kdtree_node_t * node = T->nodes + node_id;
-    if( ! bounds_overlap_ball_raw(node->bbx, Q, r2) )
+    if( ! aa_box_hit_sphere_test(node->bbx, Q, r2) )
     {
         return;
     }
@@ -809,7 +774,6 @@ kdtree_query_radius(const kdtree_t * T,
 
     _kdtree_query_radius(T, Q, 0, radius, pow(radius, 2), res);
 
-
     size_t * result = res->data;
     *nfound = res->n_used;
     free(res);
@@ -836,7 +800,7 @@ _kdtree_kde_mean(const kdtree_t * T,
 
     kdtree_node_t * node = T->nodes + node_id;
     /* Termination condition */
-    if( ! bounds_overlap_ball_raw(node->bbx, Q, r2) )
+    if( ! aa_box_hit_sphere_test(node->bbx, Q, r2) )
     {
         return;
     }
@@ -890,7 +854,7 @@ _kdtree_kde(const kdtree_t * T,
             const double sigma22)
 {
     kdtree_node_t * node = T->nodes + node_id;
-    if( ! bounds_overlap_ball_raw(node->bbx, Q, r2) )
+    if( ! aa_box_hit_sphere_test(node->bbx, Q, r2) )
     {
         return 0;
     }
@@ -987,5 +951,67 @@ void kdtree_print_info(kdtree_t * T)
     printf("n_points: %zu\n", T->n_points);
     printf("Root node bbx: ");
     node_print_bbx(T->nodes);
+    return;
+}
+
+
+static void
+internal_kdtree_collide(const kdtree_t * T,
+                        i64 u,
+                        size_t node_id,
+                        const double r2,
+                        kdtree_collide_cb cb_fun,
+                        void * cb_data)
+
+{
+    const double * Q = T->XID + XID_STRIDE*u;
+    kdtree_node_t * node = T->nodes + node_id;
+    if( ! aa_box_hit_sphere_test(node->bbx, Q, r2) )
+    {
+        return;
+    }
+
+    if(node_is_final(node))
+    {
+        double * X = T->XID + node->data_idx;
+        for(size_t kk = 0; kk < node->n_points; kk++)
+        {
+            if(eudist_sq(X + kk*XID_STRIDE, Q) < r2)
+            {
+                i64 v = kk + node->data_idx/XID_STRIDE;
+                i64 u_orig = *((size_t *) T->XID + XID_STRIDE*u + KDTREE_DIM);
+                i64 v_orig = *((size_t *) T->XID + XID_STRIDE*v + KDTREE_DIM);
+                if(u < v){
+                    cb_fun(u_orig, v_orig, cb_data);
+                }
+            }
+        }
+        return;
+    }
+
+    internal_kdtree_collide(T, u,
+                            node_left_child_id(node_id),
+                            r2, cb_fun, cb_data);
+    internal_kdtree_collide(T, u,
+                            node_right_child_id(node_id),
+                            r2, cb_fun, cb_data);
+    return;
+}
+
+
+void
+kdtree_collide(const kdtree_t * T,
+               double radius,
+               kdtree_collide_cb cb_fun,
+               void * cb_data)
+{
+    for(u32 u = 0; u < T->n_points; u++) {
+        internal_kdtree_collide(T,
+                                u,
+                                0, // root
+                                radius*radius,
+                                cb_fun,
+                                cb_data);
+    }
     return;
 }
