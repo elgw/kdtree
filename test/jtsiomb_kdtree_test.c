@@ -6,9 +6,7 @@
 #include <math.h>
 #include <time.h>
 
-
-// Test https://github.com/jtsiomb/kdtree
-#include "kdtree/kdtree.h"
+#include "kdtree/kdtree.h" // https://github.com/jtsiomb/kdtree
 
 static double timespec_diff(struct timespec* end, struct timespec * start)
 {

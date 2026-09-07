@@ -1,3 +1,7 @@
+# To run, first
+# git clone https://github.com/jtsiomb/kdtree.git
+# and build the library
+
 CC=gcc
 
 CFLAGS=-Wall -Wextra -pedantic  -Iinclude/
