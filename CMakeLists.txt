@@ -10,16 +10,14 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(BUILD_SHARED_LIBS "Build shared library" ON)
-# To build static:  -DBUILD_SHARED_LIBS=OFF
+# To build static:  $ cmake .. -DBUILD_SHARED_LIBS=OFF
 set(CMAKE_C_VISIBILITY_PRESET "hidden")
 set(CMAKE_VISIBILITY_INLINES_HIDDEN TRUE)
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-
-add_library( kdtree src/kdtree.c src/pqheap.c src/quickselect.c )
-
-
+add_library( kdtree
+  src/kdtree.c src/pqheap.c src/quickselect.c )
 
 target_include_directories(kdtree PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include

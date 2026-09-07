@@ -1,27 +1,15 @@
 #pragma once
 
-/* A space partitioning K-d tree, like described on
- * https://en.wikipedia.org/wiki/K-d_tree
- *
- * This particular implementation is hard coded for 3D data. You can
- * of course use 1D and 2D data as well by setting the coordinates of
- * the unused dimensions to 0.
- *
- * Usage:
- * Acquire a kdtree_t* by  kdtree_new and free it with kdtree_free.
- *
- * link with -kdtree -lm
- */
+// A space partitioning K-d tree, somewhat like described on
+// https://en.wikipedia.org/wiki/K-d_tree
+// Erik Wernersson 2025-2026
 
 #include <stdint.h>
 #include <stddef.h>
 
 #define KDTREE_VERSION_MAJOR 0
-#define KDTREE_VERSION_MINOR 1
+#define KDTREE_VERSION_MINOR 2
 #define KDTREE_VERSION_PATCH 0
-
-/* Will only work when KDTREE_DIM=3 unless modified */
-#define KDTREE_DIM 3
 
 #ifdef WIN32
 #define PUB __declspec(dllexport)
@@ -31,116 +19,135 @@
 
 struct pqheap;
 
-/* A tree or a leaf */
+// A node, called a leaf it is does not have any children.
+// the nodes use a binary heap layout so there is no need to store
+// pointer to the children nodes.
 typedef struct {
-    size_t id; // number; // node number TODO not needed
-
-    /* Bounding box, [minx, maxx, miny, maxy, minz, maxz] */
-    double bbx[2*KDTREE_DIM];
-
-    /* Tells where in XID that the data for this node can be found */
-    size_t data_idx;
-
-    /* The number of points associated with the node
-     * which are found in T->XID */
+    // numerical identifier of the node, i.e. where in T->nodes it can be found
+    // todo: Remove this since it can be calculated based on the address if needed
+    size_t id;
+    // Location in T->X and T->id where the elements of the node are stored
+    size_t offset;
+    // Number of points of this node
     uint32_t n_points;
-
-    /* If not a leaf, this tells how this node was split */
-    uint8_t split_dim; /* is set to KDTREE_DIM for leafs */
-    double pivot;
+    // Dimension to split on, or set to ndim if to indicate a leaf node
+    uint8_t split_dim;
+    double pivot; // the location of the split along the split dimension
 } kdtree_node_t;
 
 typedef struct{
-    /* Node allocation  */
-    kdtree_node_t * nodes; /* Array of nodes, nodes[0] is the root */
+    uint32_t ndim; // Number of dimensions
+
+    //
+    // Per node / region data.
+    //
+
+    // Node k is stored in T->nodes[k],
+    // and the corresponding bbx at T->boxes[k*T->ndim]
     size_t n_nodes_alloc; // Total number of nodes
+    kdtree_node_t * nodes; /* Array of nodes, nodes[0] is the root */
+    // Bounding boxes [minx, maxx,  miny, maxy,  ... ]
+    double * boxes;
 
-    /* Storage for coordinates and their indexes, [(x, y, z), id] */
-    double * XID;
+    //
+    // Per point data
+    //
 
-    /* Maximum number of points per leaf (i.e. end node) */
+    // Storage for coordinates, note: the order will be scrambled
+    // along the tree construction, however orig_idx keeps track
+    // of the original id of the points
+    // The points for a given node N are stored in
+    // T->X node->offset * T->ndim
+    // and forwards
+    // And the original location of those points at
+    // T->OID + node->offset
+    double * X;
+    uint32_t * OID; // original id
+
+    // Maximum number of points per leaf (i.e. end node)
     size_t max_leaf_size;
     size_t n_points; // Number of supplied points
 
-    /* Temporary buffer used during tree construction */
+
+    // Temporary buffer used during tree construction
     double * median_buffer;
 
-    /* State variables for queries */
+    // at least ndim*sizeof(double) large
+    double * point_buffer;
+
+    //
+    // State variables for querying the closest points, should not be
+    // here really. Must have had a lazy day. TODO
+    //
     struct pqheap * pq; // used for k-nearest queries
     int direct_path;
-    /* The latest query is stored internally to avoid an abundant
-       number of malloc/free. Can of course be copied by the caller. */
+    // The latest query is stored internally to avoid an abundant
+    // number of malloc/free. Can of course be copied by the caller. */
     size_t * result; // KN for storing idx of K neighbours
     size_t result_alloc; /* number of elements allocated for result */
 } kdtree_t;
 
-/* Construct a new tree based on the N points stored in X
- *
- * binsize (or max_leaf_size) is an algorithmic parameter. According
- * to [1] bin size a of 4-32 elements is optimal regardless of the
- * number of dimensions
- */
+// Construct a new tree based on the N points stored in X
+//
+// binsize (or max_leaf_size) is an algorithmic parameter. According
+// to [1] bin size a of 4-32 elements is optimal regardless of the
+// number of dimensions
 PUB kdtree_t *
 kdtree_new(const double * X,
-           size_t N, int binsize);
+           uint32_t N, uint32_t ndim,
+           int binsize);
 
 
-/* Frees all resources associated with a tree */
+// Frees all resources associated with a tree
 PUB void kdtree_free(kdtree_t * T);
 
-/* Query one point for its k nearest neighbours.  The returned array
- * contains the index of k points, sorted according to the distance of
- * the points, with the closest point first.
- *
- * Important: The returned array is owned by the tree and should not
- * be freed. It will be re-used with the next call to kdtree_query_*
- */
+// Query one point for its k nearest neighbours.  The returned array
+// contains the index of k points, sorted according to the distance of
+// the points, with the closest point first.
+//
+// Important: The returned array is owned by the tree and should not
+// be freed. It will be re-used with the next call to kdtree_query_
 PUB size_t *
 kdtree_query_knn(kdtree_t * T,
                  const double * Q,
                  size_t k);
 
-/*
- * Find all points within some radius of Q
- * Returns a newly allocated array of indexes of length nfound
- * On failure: Returns NULL and sets nfound to 0
- */
+// Find all points within some radius of Q
+// Returns a newly allocated array of indexes of length nfound
+// On failure: Returns NULL and sets nfound to 0
 PUB size_t *
 kdtree_query_radius(const kdtree_t * T,
                     const double * Q,
                     const double radius,
                     size_t * nfound);
 
-/* Estimate the local density using non-normalized Gaussian symmetric
- * kernel with a fixed sigma.
- *
- * G(x, sigma) = exp(-x^2 / (2*sigma^2))
- *
- * For a custom kernel please use kdtree_query_radius and calculate
- * the KDE based on the found points.
- *
- * Cutoff: will use points up to sigma*cutoff away from the query
- * point Q. A default value will be used if cutoff == -1.
- */
+// Estimate the local density using non-normalized Gaussian symmetric
+// kernel with a fixed sigma.
+//
+// G(x, sigma) = exp(-x^2 / (2*sigma^2))
+//
+// For a custom kernel please use kdtree_query_radius and calculate
+// the KDE based on the found points.
+//
+// Cutoff: will use points up to sigma*cutoff away from the query
+// point Q. A default value will be used if cutoff == -1.
 PUB double
 kdtree_kde(const kdtree_t * T,
            const double * Q,
            double sigma,
            double cutoff);
 
-/* Calculate the weighted mean position of a Gaussian KDE at the point
- * Q as the following sum over all the neighbors
- *
- * m(x) = \frac{ \sum K(x_i-x) x_i }{\sum K(x_i -x)}
- *
- * returns: m -- the weighted mean position. Will be Q if no neighbours found.
- *
- * This is an ingredient of the mean shift algorithm. Please not that
- * using a Gaussian kernel a quite large radius contributes to the
- * kde, set cutoff to you liking. A cutoff of 0 means that it will be
- * set automagically.
- */
-
+// Calculate the weighted mean position of a Gaussian KDE at the point
+// Q as the following sum over all the neighbors
+//
+// m(x) = \frac{ \sum K(x_i-x) x_i }{\sum K(x_i -x)}
+//
+// returns: m -- the weighted mean position. Will be Q if no neighbours found.
+//
+// This is an ingredient of the mean shift algorithm. Please not that
+// using a Gaussian kernel a quite large radius contributes to the
+// kde, set cutoff to you liking. A cutoff of 0 means that it will be
+// set automagically.
 PUB void
 kdtree_kde_mean(const kdtree_t *,
                 const double * Q,
@@ -148,31 +155,29 @@ kdtree_kde_mean(const kdtree_t *,
                 double cutoff,
                 double * mean);
 
-/* Wanted: Expectation Maximization (EM) with Gaussian Mixture Model (GMM)
-void kdtree_emgmm(const kdtree_t * T,
-const gaussian ** G0,
-gaussian ** Gfinal);
- */
+// Wanted: Expectation Maximization (EM) with Gaussian Mixture Model (GMM)
+// void kdtree_emgmm(const kdtree_t * T,
+// const gaussian ** G0,
+// gaussian ** Gfinal);
 
-
-/* Find the index of the closest point */
+// Find the index of the closest point
 PUB size_t kdtree_query_closest(kdtree_t * T, double * X);
 
-PUB void node_print_bbx(const kdtree_node_t * N);
+PUB void node_print_bbx(const kdtree_t * T, const kdtree_node_t * N);
 
-/* Make a shallow copy of a kd-tree for usage by another thread */
+// Make a shallow copy of a kd-tree for usage by another thread
 PUB kdtree_t * kdtree_copy_shallow(kdtree_t * );
 
-/* Free a tree returned from kdtree_copy_shallow */
+// Free a tree returned from kdtree_copy_shallow
 PUB void kdtree_free_shallow(kdtree_t * T);
 
-/* Run some self-tests */
+// Run some self-tests
 PUB void kdtree_validate(kdtree_t * T);
 
 PUB void kdtree_print_info(kdtree_t * T);
 
-// TODO
-// Perform a all-vs-all collision test to detect points that
+
+// Performs an all-vs-all collision test to detect points that
 // are withing radius distance from each other.
 //
 // In the callback function, u and v refer to the points of
