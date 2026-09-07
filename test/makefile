@@ -31,7 +31,7 @@ ifeq ($(FANALYZER),1)
 CFLAGS+=-fanalyzer
 endif
 
-LDFLAGS += -Lkdtree/ -lkdtree -Wl,-rpath=kdtree
+LDFLAGS += -Lkdtree/ -lkdtree -Wl,-rpath='$$ORIGIN'/kdtree
 
 jtsiomb_kdtree_test: jtsiomb_kdtree_test.c
 	$(CC) $(CFLAGS) jtsiomb_kdtree_test.c $(LDFLAGS) -o jtsiomb_kdtree_test

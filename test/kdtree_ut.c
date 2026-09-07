@@ -957,10 +957,7 @@ void gen_benchmark_table_query_distance(int ndim, int binsize)
             }
             clock_gettime(CLOCK_REALTIME, &tend);
             double t_build_tree = timespec_diff(&tend, &tstart);
-
-
             clock_gettime(CLOCK_REALTIME, &tstart);
-            size_t dummy = 0;
             double radius =  2.0/cbrt(N);
             for(size_t kk = 0; kk<N; kk++)
             {
@@ -970,7 +967,6 @@ void gen_benchmark_table_query_distance(int ndim, int binsize)
                 n_found_total += n_found;
                 free(knn);
             }
-            assert(dummy > 0);
             clock_gettime(CLOCK_REALTIME, &tend);
             double t_scan = timespec_diff(&tend, &tstart);
 
@@ -1108,20 +1104,16 @@ int main(int argc, char ** argv)
         }
     }
 
-
     size_t N = 1000;
     int k = 5;
     int binsize = 20;
-    if(argc > 1)
-    {
+    if(argc > 1) {
         N = atol(argv[1]);
     }
-    if(argc > 2)
-    {
+    if(argc > 2){
         k = atoi(argv[2]);
     }
-    if(argc > 3)
-    {
+    if(argc > 3){
         binsize = atoi(argv[3]);
     }
     printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
@@ -1141,7 +1133,6 @@ int main(int argc, char ** argv)
     test_kdtree_kde_mean(N, 3, binsize);
 
 
-
     if(N > 100000 )
     {
         return EXIT_SUCCESS;
@@ -1157,10 +1148,6 @@ int main(int argc, char ** argv)
     test_align_dots(5000, 3);
 
     test_threads(N, 3, k, binsize);
-
-
-
-
 
     return EXIT_SUCCESS;
 }

@@ -29,18 +29,18 @@ double * rand_points(size_t N, int ndim)
 
 int main(int argc, char ** argv)
 {
+    int ndim = 3;
+    printf("ndim=%d\n", ndim);
     printf("| method | N    | t_construct [ms] | t_query [ms] | t_total [ms] |\n");
     printf("| ---    | ---: | ---:             | ---:         | --:          |\n");
     size_t n_found_total = 0;
     for(int N = 128; N < 2<<21; N*=2){
-        int ndim = 3;
         double * X = rand_points(N, ndim);
         struct timespec t0, t1, t2, t3;
         clock_gettime(CLOCK_REALTIME, &t0);
         void * kd = kd_create(3);
         for(int kk = 0; kk < N; kk++){
-            double * x = X + kk*ndim;
-            kd_insert3(kd, x[0], x[1], x[2], 0);
+            kd_insert(kd, X + kk*ndim, NULL);
         }
         clock_gettime(CLOCK_REALTIME, &t1);
 
@@ -48,8 +48,7 @@ int main(int argc, char ** argv)
         clock_gettime(CLOCK_REALTIME, &t2);
         for(int kk = 0; kk < N; kk++)
         {
-            const double * x = X + kk*ndim;
-            void * set = kd_nearest_range3(kd, x[0], x[1], x[2], radius);
+            void * set = kd_nearest_range(kd, X + kk*ndim, radius);
             n_found_total += kd_res_size(set);
             kd_res_free(set);
         }

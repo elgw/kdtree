@@ -47,6 +47,7 @@ see `kdtree.h` for the complete function signatures and some
 documentation. Look in `kdtree_ut.c` for complete usage examples.
 
 ## Details
+
 - Data partitioning using Hoare's scheme, typically used in
   quicksort and quickselect.
 
@@ -246,11 +247,17 @@ $ python test/sklearn_test.py 7
 
 ### Compared to [jtsiomb/kdtree](https://github.com/jtsiomb/kdtree)
 
-Here the function `kd_nearest_range3` of jtsiomb's library is compare
+Didn't know that this was also called just kdtree so I'll refer to it
+as jtsiomb's. It does not have any function to query the n nearest
+neighbors so here `kd_nearest_range` of jtsiomb's library is compared
 to `kdtree_query_radius`. See `test/jtsiomb_kdtree_test.c` for
 details.
 
 <details><summary>Results</summary>
+
+``` shell
+./kdtree_ut --table4
+```
 
 | method |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
 |--------|--------:|-----------------:|-------------:|-------------:|
@@ -270,6 +277,9 @@ details.
 | kdtree | 1048576 |          324.931 |     1009.145 |     1334.076 |
 | kdtree | 2097152 |          651.806 |     2064.598 |     2716.403 |
 
+``` shell
+$ ./test/jtsiomb_kdtree_test
+```
 
 | method  |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
 |---------|--------:|-----------------:|-------------:|-------------:|
@@ -332,7 +342,8 @@ this to your `CMakeLists.txt`:
 
 ## To Do
 
-- [ ] Make it thread safe.
+- [ ] Thread safe/multicore queries and construction.
+- [ ] Rename to something else since kdtree is taken, ndtree?
 - [ ] More validation.
 
 ## History
