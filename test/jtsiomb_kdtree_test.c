@@ -59,7 +59,7 @@ int main(int argc, char ** argv)
         double t_create = 1000.0*timespec_diff(&t1, &t0);
         double t_scan = 1000.0*timespec_diff(&t3, &t2);
         double t_total = t_create + t_scan;
-        printf("| jtsiomb | %d | %.3f, | %.3f | %.3f |\n", N, t_create, t_scan, t_total);
+        printf("| jtsiomb | %d | %.3f | %.3f | %.3f |\n", N, t_create, t_scan, t_total);
         kd_free(kd);
         free(X);
     }
