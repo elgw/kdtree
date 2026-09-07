@@ -934,6 +934,56 @@ void gen_benchmark_table(int ndim, int k, int binsize)
     printf("\n");
 }
 
+void gen_benchmark_table_query_distance(int ndim, int binsize)
+{
+
+    size_t n_found_total = 0;
+    printf("\n--> gen_benchmark_table_query_distance(ndim=%d, binsize=%d)\n",
+           ndim, binsize);
+    printf("| method | N    | t_construct [ms] | t_query [ms] | t_total [ms] |\n");
+    printf("| ---    | ---: | ---:             | ---:         | --:          |\n");
+
+        for(u32 N = 128; N < 2<<21; N*=2)
+        {
+            double * X = rand_points(N, ndim);
+
+            struct timespec tstart, tend;
+            clock_gettime(CLOCK_REALTIME, &tstart);
+            kdtree_t * T = kdtree_new(X, N, ndim, binsize);
+            if(T == NULL)
+            {
+                printf("Could not construct a kd-tree\n");
+                exit(EXIT_FAILURE);
+            }
+            clock_gettime(CLOCK_REALTIME, &tend);
+            double t_build_tree = timespec_diff(&tend, &tstart);
+
+
+            clock_gettime(CLOCK_REALTIME, &tstart);
+            size_t dummy = 0;
+            double radius =  2.0/cbrt(N);
+            for(size_t kk = 0; kk<N; kk++)
+            {
+                //printf("\n-> Q: %zu (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
+                size_t n_found = 0;
+                size_t * knn = kdtree_query_radius(T, X+ndim*kk, radius, &n_found);
+                n_found_total += n_found;
+                free(knn);
+            }
+            assert(dummy > 0);
+            clock_gettime(CLOCK_REALTIME, &tend);
+            double t_scan = timespec_diff(&tend, &tstart);
+
+            printf("| kdtree | %u | %.3f | %.3f | %.3f |\n",
+                   N,
+                   1000.0*t_build_tree,
+                   1000.0*t_scan,
+                   1000.0*(t_build_tree + t_scan));
+        }
+    printf("\n");
+    printf("n_found=%zu\n", n_found_total);
+}
+
 void benchmark(size_t N, int ndim, int k, int binsize)
 {
     printf("\n--> benchmark(N=%zu, k=%d, binsize=%d)\n",
@@ -1033,7 +1083,7 @@ int main(int argc, char ** argv)
     srand((unsigned) time(NULL));
 
     if(argc > 1) {
-        if(strcmp(argv[1], "--table1") == 0) { // 3D
+        if(strcmp(argv[1], "--table1") == 0) { // 2D
             int k = 5;
             int binsize = 35;
             gen_benchmark_table(2, k, binsize);
@@ -1045,10 +1095,15 @@ int main(int argc, char ** argv)
             gen_benchmark_table(3, k, binsize);
             exit(EXIT_SUCCESS);
         }
-        if(strcmp(argv[1], "--table3") == 0) { // 2D
+        if(strcmp(argv[1], "--table3") == 0) { // 7D
             int k = 5;
             int binsize = 35;
             gen_benchmark_table(7, k, binsize);
+            exit(EXIT_SUCCESS);
+        }
+        if(strcmp(argv[1], "--table4") == 0) {
+            int binsize = 35;
+            gen_benchmark_table_query_distance(3, binsize);
             exit(EXIT_SUCCESS);
         }
     }

@@ -244,6 +244,52 @@ $ python test/sklearn_test.py 7
 
 </details>
 
+### Compared to [jtsiomb/kdtree](https://github.com/jtsiomb/kdtree)
+
+Here the function `kd_nearest_range3` of jtsiomb's library is compare
+to `kdtree_query_radius`. See `test/jtsiomb_kdtree_test.c` for
+details.
+
+<details><summary>Results</summary>
+
+| method |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
+|--------|--------:|-----------------:|-------------:|-------------:|
+| kdtree |     128 |            0.021 |        0.041 |        0.062 |
+| kdtree |     256 |            0.024 |        0.072 |        0.096 |
+| kdtree |     512 |            0.055 |        0.160 |        0.215 |
+| kdtree |    1024 |            0.141 |        0.365 |        0.505 |
+| kdtree |    2048 |            0.302 |        0.788 |        1.090 |
+| kdtree |    4096 |            0.672 |        1.711 |        2.383 |
+| kdtree |    8192 |            1.459 |        3.736 |        5.195 |
+| kdtree |   16384 |            3.270 |        8.063 |       11.333 |
+| kdtree |   32768 |            7.097 |       16.416 |       23.513 |
+| kdtree |   65536 |           15.473 |       37.942 |       53.415 |
+| kdtree |  131072 |           33.058 |       81.228 |      114.286 |
+| kdtree |  262144 |           71.512 |      176.485 |      247.997 |
+| kdtree |  524288 |          152.571 |      411.550 |      564.121 |
+| kdtree | 1048576 |          324.931 |     1009.145 |     1334.076 |
+| kdtree | 2097152 |          651.806 |     2064.598 |     2716.403 |
+
+
+| method  |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
+|---------|--------:|-----------------:|-------------:|-------------:|
+| jtsiomb |     128 |           0.025, |        0.024 |        0.049 |
+| jtsiomb |     256 |           0.061, |        0.044 |        0.105 |
+| jtsiomb |     512 |           0.056, |        0.095 |        0.152 |
+| jtsiomb |    1024 |           0.130, |        0.208 |        0.338 |
+| jtsiomb |    2048 |           0.264, |        0.458 |        0.722 |
+| jtsiomb |    4096 |           0.581, |        1.003 |        1.584 |
+| jtsiomb |    8192 |           1.319, |        2.274 |        3.593 |
+| jtsiomb |   16384 |           3.125, |        5.324 |        8.449 |
+| jtsiomb |   32768 |           7.308, |       11.767 |       19.075 |
+| jtsiomb |   65536 |          20.112, |       26.018 |       46.130 |
+| jtsiomb |  131072 |          36.545, |       59.059 |       95.604 |
+| jtsiomb |  262144 |         101.231, |      170.170 |      271.401 |
+| jtsiomb |  524288 |         250.874, |      461.688 |      712.562 |
+| jtsiomb | 1048576 |         681.888, |     1075.051 |     1756.939 |
+| jtsiomb | 2097152 |        1703.490, |     2583.382 |     4286.872 |
+
+</details>
 
 ## Current validation steps
 
