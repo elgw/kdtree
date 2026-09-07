@@ -5,10 +5,6 @@
 #include <stdint.h>
 #include <math.h>
 
-#ifdef GSL
-#include <gsl/gsl_statistics_double.h>
-#endif
-
 #include "kdtree.h"
 #include "pqheap.h"
 #include "quickselect.h"

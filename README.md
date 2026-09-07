@@ -68,9 +68,6 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
   although that would be possible to do. The query methods are not
   thread safe (but that is of course doable as well).
 
-- Can use GSL (`gsl_stats_median`) to find the pivot or the provided
-  quick select implementation.
-
 ## Performance hints
 
 Finding the k=5 nearest neighbours for each point among

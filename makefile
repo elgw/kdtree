@@ -3,13 +3,6 @@ CC=gcc
 CFLAGS=-Wall -Wextra -pedantic  -Iinclude/
 LDFLAGS=-lm -lpthread
 
-GSL?=0
-
-ifeq ($(GSL),1)
-CFLAGS+=`pkg-config gsl --cflags` -DGSL
-LDFLAGS+=`pkg-config gsl --libs`
-endif
-
 SAN?=0
 DEBUG?=0
 
@@ -17,7 +10,6 @@ ifeq ($(SAN),1)
 CFLAGS+=-fsanitize=address
 DEBUG=1
 endif
-
 
 ifeq ($(DEBUG),1)
 CFLAGS+=-g3 -Og
@@ -53,7 +45,6 @@ quickselect.o: src/quickselect.c
 libkdtree.a: $(SRCFILES) makefile
 	$(CC) -c $(CFLAGS) $(SRC) $(LDFLAGS)
 	ar rcs libkdtree.a *.o
-
 
 libkdtree.so: $(SRCFILES) makefile
 	$(CC) $(CFLAGS) -fPIC -shared $(SRC) $(LDFLAGS) -o libkdtree.so
