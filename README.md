@@ -27,7 +27,7 @@ Below are examples of the supported methods:
 #include <kdtree.h>
 ...
 // X: N k-D points [k x N]
-kdtree_t * T = kdtree_new(X, N, k, 20);
+kdtree_t * T = kdtree_new(X, N, k, max_leaf_size);
 
 // Find the k nearest neighbours to Q [k x 1]
 size_t * knn = kdtree_query_knn(T, Q, k);
@@ -70,10 +70,14 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
 
 ## Performance hints
 
-Finding the k=5 nearest neighbours for each point among
-N 3D points (`./kdtree_ut --table1`) gives:
+Many tests can be devised but the results below are based on the problem
+of finding the 5 nearest neighbours for each of the N points:
 
 <details><summary>kdtree 2D</summary>
+
+``` shell
+$ ./kdtree_ut --table1
+```
 
 | method |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
 |--------|--------:|-----------------:|-------------:|-------------:|
@@ -97,6 +101,10 @@ N 3D points (`./kdtree_ut --table1`) gives:
 
 <details><summary>kdtree 3D</summary>
 
+``` shell
+$ ./kdtree_ut --table2
+```
+
 | method |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
 |--------|--------:|-----------------:|-------------:|-------------:|
 | kdtree |     128 |            0.024 |        0.099 |        0.122 |
@@ -118,6 +126,10 @@ N 3D points (`./kdtree_ut --table1`) gives:
 </details>
 
 <details><summary>kdtree 7D</summary>
+
+``` shell
+$ ./kdtree_ut --table3
+```
 
 | method |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
 |--------|--------:|-----------------:|-------------:|-------------:|
