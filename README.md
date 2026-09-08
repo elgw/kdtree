@@ -28,10 +28,10 @@ Below are examples of the supported methods:
 kdtree_t * T = kdtree_new(X, N, k, max_leaf_size);
 
 // Find the k nearest neighbours to Q [k x 1]
-size_t * knn = kdtree_query_knn(T, Q, k);
+u32 * nbrs = kdtree_query_knn(T, Q, k);
 
 // Find any point within a distance of radius to Q
-size_t * idx = kdtree_query_radius(T, Q, radius, &n);
+u32 nfound = kdtree_query_radius(T, Q, radius, &result, &result_size);
 
 // Evaluate the point density under the point, using
 // an isotropic Gaussian controlled by sigma.
@@ -240,6 +240,35 @@ $ python test/sklearn_test.py 7
 | sklearn |  524288 |          777.966 |    43915.266 |    44693.232 |
 | sklearn | 1048576 |         1888.079 |   105688.990 |   107577.068 |
 | sklearn | 2097152 |         4468.667 |   249584.014 |   254052.681 |
+
+</details>
+
+### Compared to [joergdietrich/libkdtree](https://github.com/joergdietrich/libkdtree)
+
+Looking for the 5 nearest neighbors among N 3D points.
+
+In this case the timers were around `kd_buildTree` and `kd_qnearest`, see `test/joergdietrich_libkdtree_test.c`
+
+<details><summary>Results</summary>
+
+| method        |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
+|---------------|--------:|-----------------:|-------------:|-------------:|
+| joergdietrich |     128 |            0.111 |        0.034 |        0.145 |
+| joergdietrich |     256 |            0.213 |        0.070 |        0.283 |
+| joergdietrich |     512 |            0.461 |        0.156 |        0.618 |
+| joergdietrich |    1024 |            1.006 |        0.320 |        1.326 |
+| joergdietrich |    2048 |            2.195 |        0.726 |        2.920 |
+| joergdietrich |    4096 |            4.871 |        1.637 |        6.508 |
+| joergdietrich |    8192 |           10.696 |        3.614 |       14.309 |
+| joergdietrich |   16384 |           23.409 |        9.204 |       32.612 |
+| joergdietrich |   32768 |           52.772 |       19.545 |       72.316 |
+| joergdietrich |   65536 |          114.479 |       55.876 |      170.355 |
+| joergdietrich |  131072 |          251.696 |      161.391 |      413.088 |
+| joergdietrich |  262144 |          552.926 |      406.297 |      959.223 |
+| joergdietrich |  524288 |         1014.584 |      981.533 |     1996.117 |
+| joergdietrich | 1048576 |         2448.417 |     2266.858 |     4715.275 |
+| joergdietrich | 2097152 |         5463.280 |     5872.767 |    11336.047 |
+
 
 </details>
 

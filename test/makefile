@@ -35,3 +35,11 @@ LDFLAGS += -Lkdtree/ -lkdtree -Wl,-rpath='$$ORIGIN'/kdtree
 
 jtsiomb_kdtree_test: jtsiomb_kdtree_test.c
 	$(CC) $(CFLAGS) jtsiomb_kdtree_test.c $(LDFLAGS) -o jtsiomb_kdtree_test
+
+JDFILES = libkdtree/lib/*.c \
+joergdietrich_libkdtree_test.c
+
+JDCFLAGS = $(CFLAGS) -I libkdtree/lib/
+
+joergdietrich_libkdtree_test:
+	$(CC) $(JDCFLAGS) $(JDFILES) $(LDFLAGS) -o joergdietrich_libkdtree
