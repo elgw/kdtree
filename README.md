@@ -302,7 +302,7 @@ neighbors so here `kd_nearest_range` of jtsiomb's library is compared
 to `kdtree_query_radius`. See `test/jtsiomb_kdtree_test.c` for
 details.
 
-<details><summary>Results</summary>
+<details><summary>Results, 3D range query</summary>
 
 ``` shell
 ./kdtree_ut --table4
