@@ -72,7 +72,7 @@ documentation. Look in `kdtree_ut.c` for complete usage examples.
 Many tests can be devised but the results below are based on the problem
 of finding the 5 nearest neighbours for each of the N points:
 
-<details><summary>kdtree 2D 5NN</summary>
+<details><summary>kdtree 2D 5-NN</summary>
 
 ``` shell
 $ ./kdtree_ut --table1
@@ -98,7 +98,7 @@ $ ./kdtree_ut --table1
 
 </details>
 
-<details><summary>kdtree 3D 5NN</summary>
+<details><summary>kdtree 3D 5-NN</summary>
 
 ``` shell
 $ ./kdtree_ut --table2
@@ -124,7 +124,7 @@ $ ./kdtree_ut --table2
 
 </details>
 
-<details><summary>kdtree 7D 5NN</summary>
+<details><summary>kdtree 7D 5-NN</summary>
 
 ``` shell
 $ ./kdtree_ut --table3
@@ -159,10 +159,7 @@ NearestNeighbors(n_neighbors=k, algorithm='kd_tree').fit(X)
 distances, indices = nbrs.kneighbors(X)
 ```
 
-which gave:
-
-
-<details><summary>sklearn 2D 5NN</summary>
+<details><summary>Results, sklearn 2D 5-NN</summary>
 
 ``` shell
 $ python test/sklearn_test.py 2
@@ -187,7 +184,7 @@ $ python test/sklearn_test.py 2
 
 </details>
 
-<details><summary>sklearn 3D 5NN</summary>
+<details><summary>Results, sklearn 3D 5-NN</summary>
 
 ``` shell
 $ python test/sklearn_test.py 3
@@ -212,7 +209,7 @@ $ python test/sklearn_test.py 3
 
 </details>
 
-<details><summary>sklearn 7D 5NN</summary>
+<details><summary>Results, sklearn 7D 5-NN</summary>
 
 ``` shell
 $ python test/sklearn_test.py 7
@@ -240,13 +237,13 @@ $ python test/sklearn_test.py 7
 ### Compared to [joergdietrich/libkdtree](https://github.com/joergdietrich/libkdtree)
 
 Looking for the 5 nearest neighbors among N 3D points. Same as the
-`kdtree 3D 5NN` table above.
+`kdtree 3D 5-NN` table above.
 
 In this case the timers were around `kd_buildTree` and `kd_qnearest`,
 see `test/joergdietrich_libkdtree_test.c`. The points were f32 here,
 not f64 as in the other tests.
 
-<details><summary>Results, joergdietrich 3D 5NN</summary>
+<details><summary>Results, joergdietrich 3D 5-NN</summary>
 
 ``` shell
 $ test/joergdietrich_libkdtree
