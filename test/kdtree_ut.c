@@ -1,13 +1,16 @@
-#include <time.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdbool.h>
+#include <assert.h>
 #include <math.h>
-#include <string.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
+
 
 #include "kdtree.h"
-#include "../src/pqheap.h"
 
 typedef double fxx;
 typedef int8_t i8;
@@ -15,15 +18,17 @@ typedef int32_t i32;
 typedef uint32_t u32;
 typedef uint64_t u64;
 
+typedef uint32_t kdtree_index;
+
 // Struct for parallel queries
 typedef struct{
     kdtree_t * T;
     const double * Q;
-    size_t nQ;
+    kdtree_index nQ;
     int k;
     int thread;
     int nthreads;
-    size_t * KNN;
+    kdtree_index * KNN;
 } _p_query_t;
 
 
@@ -34,9 +39,9 @@ typedef struct{
  * The returned matrix is kxN elements large and should be freed by
  * the caller.
  */
-size_t * kdtree_query_knn_multi(kdtree_t * T,
-                                const double * Q, size_t nQ,
-                                int k, int ntheads);
+kdtree_index * kdtree_query_knn_multi(kdtree_t * T,
+                                      const double * Q, kdtree_index nQ,
+                                      int k, int ntheads);
 
 
 void * _p_query(void * _config)
@@ -45,30 +50,30 @@ void * _p_query(void * _config)
     kdtree_t * T = config->T;
 
     const double * Q = config->Q;
-    const size_t nQ = config->nQ;
+    const kdtree_index nQ = config->nQ;
     const int k = config->k;
     const int thread = config->thread;
     const int nthreads = config->nthreads;
-    size_t * KNN = config->KNN;
-    for(size_t kk = thread; kk<nQ; kk+=nthreads)
+    kdtree_index * KNN = config->KNN;
+    for(kdtree_index kk = thread; kk<nQ; kk+=nthreads)
     {
-        size_t * knn = kdtree_query_knn(T, Q+2*kk, k);
-        memcpy(KNN + k*kk, knn, k*sizeof(size_t));
+        kdtree_index * knn = kdtree_query_knn(T, Q+2*kk, k);
+        memcpy(KNN + k*kk, knn, k*sizeof(kdtree_index));
     }
     return NULL;
 }
 
-size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k, int nthreads)
+kdtree_index * kdtree_query_knn_multi(kdtree_t * T, const double * Q, kdtree_index nQ, int k, int nthreads)
 {
-    size_t * KNN = calloc(nQ*k, sizeof(size_t));
+    kdtree_index * KNN = calloc(nQ*k, sizeof(kdtree_index));
     assert(KNN != NULL);
 
     if(nthreads == 1)
     {
-        for(size_t kk = 0; kk<nQ; kk++)
+        for(kdtree_index kk = 0; kk<nQ; kk++)
         {
-            size_t * knn = kdtree_query_knn(T, Q+2*kk, k);
-            memcpy(KNN + k*kk, knn, k*sizeof(size_t));
+            kdtree_index * knn = kdtree_query_knn(T, Q+2*kk, k);
+            memcpy(KNN + k*kk, knn, k*sizeof(kdtree_index));
         }
         return KNN;
     } else {
@@ -105,16 +110,16 @@ size_t * kdtree_query_knn_multi(kdtree_t * T, const double * Q, size_t nQ, int k
 /* Dynamic vector array */
 struct dvarray {
     double * data;
-    size_t n_used;
-    size_t n_alloc;
+    kdtree_index n_used;
+    kdtree_index n_alloc;
     int ndim;
 };
 
-static void dvarray_n_more(struct dvarray * A, size_t nmore)
+static void dvarray_n_more(struct dvarray * A, kdtree_index nmore)
 {
     if(A->n_used + nmore >= A->n_alloc)
     {
-        size_t new_size = A->n_alloc + nmore;
+        kdtree_index new_size = A->n_alloc + nmore;
         if(new_size < 1.2 *A->n_alloc)
         {
             new_size = 1.2*A->n_alloc;
@@ -150,7 +155,7 @@ static void dvarray_free(struct dvarray * A)
     return;
 }
 
-struct dvarray * dvarray_new(size_t n, int ndim)
+struct dvarray * dvarray_new(kdtree_index n, int ndim)
 {
     assert(n > 0);
     struct dvarray * A = calloc(1, sizeof(struct dvarray));
@@ -162,11 +167,11 @@ struct dvarray * dvarray_new(size_t n, int ndim)
     return A;
 }
 
-double * rand_points(size_t N, int ndim)
+double * rand_points(kdtree_index N, int ndim)
 {
     double * X = calloc(ndim*N, sizeof(double));
     assert(X != NULL);
-    for(size_t kk = 0; kk<ndim*N; kk++)
+    for(kdtree_index kk = 0; kk<ndim*N; kk++)
     {
         X[kk] = 1000 * (double) rand() / (double) RAND_MAX;
     }
@@ -197,16 +202,16 @@ static double timespec_diff(struct timespec* end, struct timespec * start)
 }
 
 #ifdef __APPLE__
-size_t get_peakMemoryKB(void)
+kdtree_index get_peakMemoryKB(void)
 {
     struct rusage r_usage;
     getrusage(RUSAGE_SELF, &r_usage);
-    return (size_t) round((double) r_usage.ru_maxrss/1024.0);
+    return (kdtree_index) round((double) r_usage.ru_maxrss/1024.0);
 }
 #endif
 
 #ifndef __APPLE__
-size_t get_peakMemoryKB(void)
+kdtree_index get_peakMemoryKB(void)
 {
     char * statfile = calloc(100, sizeof(char));
     assert(statfile != NULL);
@@ -245,7 +250,7 @@ size_t get_peakMemoryKB(void)
     // (reference: fs/proc/task_mmu.c)
     // actually in kiB i.e., 1024 bytes
     // since the last three characters are ' kb' we can skip them and parse in between
-    size_t peakMemoryKB = 0;
+    kdtree_index peakMemoryKB = 0;
     //  printf("peakline: '%s'\n", peakline);
     if(peakline == NULL)
     {
@@ -256,7 +261,7 @@ size_t get_peakMemoryKB(void)
         peakline[strlen(peakline) -4] = '\0';
 
         //    printf("peakline: '%s'\n", peakline+7);
-        peakMemoryKB = (size_t) atol(peakline+7);
+        peakMemoryKB = (kdtree_index) atol(peakline+7);
     }
 
     free(peakline);
@@ -266,16 +271,16 @@ size_t get_peakMemoryKB(void)
 
 void fprint_peakMemory(FILE * fout)
 {
-    size_t pm = get_peakMemoryKB();
+    kdtree_index pm = get_peakMemoryKB();
 
     if(fout == NULL) fout = stdout;
-    fprintf(fout, "peakMemory: %zu kiB\n", pm);
+    fprintf(fout, "peakMemory: %u kiB\n", pm);
 
     return;
 }
 
 
-bool is_radially_sorted(const double * X, const double * Q, const size_t * N,
+bool is_radially_sorted(const double * X, const double * Q, const kdtree_index * N,
                         int ndim,
                         const int k)
 {
@@ -293,7 +298,7 @@ bool is_radially_sorted(const double * X, const double * Q, const size_t * N,
     return true;
 }
 
-bool is_unique(const size_t * N, const int k)
+bool is_unique(const kdtree_index * N, const int k)
 {
     for(int kk = 0; kk < k; kk++)
     {
@@ -309,9 +314,11 @@ bool is_unique(const size_t * N, const int k)
 }
 
 bool found_correct(double * X,
-                   size_t N, int ndim, double * Q,
-                   size_t * knn, int k)
+                   kdtree_index N, int ndim,
+                   double * Q,
+                   kdtree_index * knn, int k)
 {
+    // it should have the longest distance
     // if the last two distances are unique
     // i.e., not duplicates we should find
     // exactly k-1 points below r
@@ -327,7 +334,7 @@ bool found_correct(double * X,
     double r = 0.5*(r0+r1);
     int nfound = 0;
 
-    for(size_t kk = 0; kk<N; kk++)
+    for(kdtree_index kk = 0; kk<N; kk++)
     {
         double rp = eudist3(Q, X + ndim*kk, ndim);
 
@@ -341,15 +348,16 @@ bool found_correct(double * X,
     {
         return true;
     }
-    printf("ERROR: Found %d point(s) < %f, expected %d\n", nfound, r, k-1);
-    //assert(nfound == k-1);
-
+    printf("\n");
+    printf("ERROR: From the %u-NN the largest distance to the query point was %f\n", k, r1);
+    printf("       Brute force found %d point(s) below that distance\n", nfound);
+    printf("       kdtree found %d below that distance\n", k-1);
     return false;
 }
 
-void test_threads(size_t N, int ndim, int k, int binsize)
+void test_threads(kdtree_index N, int ndim, int k, int binsize)
 {
-    printf("\n--> test_threads(N=%zu, d=%d, binsize=%d)\n",
+    printf("\n--> test_threads(N=%u, d=%d, binsize=%d)\n",
            N, k, binsize);
     double * X = rand_points(N, ndim);
 
@@ -360,7 +368,7 @@ void test_threads(size_t N, int ndim, int k, int binsize)
     {
         struct timespec tstart, tend;
         clock_gettime(CLOCK_REALTIME, &tstart);
-        size_t * KNN = kdtree_query_knn_multi(T, X, N, k, nthreads);
+        kdtree_index * KNN = kdtree_query_knn_multi(T, X, N, k, nthreads);
         free(KNN);
         clock_gettime(CLOCK_REALTIME, &tend);
         double t_query = timespec_diff(&tend, &tstart);
@@ -371,9 +379,9 @@ void test_threads(size_t N, int ndim, int k, int binsize)
     return;
 }
 
-void basic_tests(size_t N, int ndim, int max_leaf_size)
+void basic_tests(kdtree_index N, int ndim, int max_leaf_size)
 {
-    printf("\n--> basic_tests(N=%zu, ndim=%d, max_leaf_size=%d)\n",
+    printf("\n--> basic_tests(N=%u, ndim=%d, max_leaf_size=%d)\n",
            N, ndim, max_leaf_size);
     double * X = rand_points(N, ndim);
 
@@ -390,7 +398,6 @@ void basic_tests(size_t N, int ndim, int max_leaf_size)
         printf("Could not construct a kd-tree\n");
         exit(EXIT_FAILURE);
     }
-    kdtree_validate(T);
 
     kdtree_free(T); T = NULL;
     printf("done\n");
@@ -400,15 +407,15 @@ void basic_tests(size_t N, int ndim, int max_leaf_size)
     printf("-- All points identical\n");
     X = calloc(N*ndim, sizeof(double));
     T = kdtree_new(X, N, ndim, max_leaf_size);
-    size_t * idx = kdtree_query_knn(T, X, 5);
-    printf("%zu, %zu, %zu, %zu, %zu",
+    kdtree_index * idx = kdtree_query_knn(T, X, 5);
+    printf("%u, %u, %u, %u, %u",
            idx[0], idx[1], idx[2], idx[3], idx[4]);
     free(X); X = NULL;
     kdtree_free(T); T = NULL;
 }
 
 void kde_mean_ref(const double * X,
-                  size_t N,
+                  kdtree_index N,
                   int ndim,
                   const double * Q,
                   double sigma,
@@ -416,7 +423,7 @@ void kde_mean_ref(const double * X,
 {
     double xmeank[3] = {0};
     double meank = 0;
-    for(size_t kk = 0; kk < N; kk++)
+    for(kdtree_index kk = 0; kk < N; kk++)
     {
         double r = eudist3(X+3*kk, Q, ndim);
         double k = exp(-r*r/(2.0*sigma*sigma));
@@ -434,9 +441,9 @@ void kde_mean_ref(const double * X,
     }
 }
 
-void test_kdtree_kde_mean(size_t N, int ndim, int max_leaf_size)
+void test_kdtree_kde_mean(kdtree_index N, int ndim, int max_leaf_size)
 {
-    printf("\n--> test_kdtree_kde_mean(N=%zu, max_leaf_size=%d)\n",
+    printf("\n--> test_kdtree_kde_mean(N=%u, max_leaf_size=%d)\n",
            N, max_leaf_size);
     double * X = rand_points(N, ndim);
 
@@ -504,25 +511,25 @@ print_point(const double * P, int ndim)
 void print_query_and_result(const double * X,
                             const double * Q,
                             int ndim,
-                            const size_t * idx,
-                            size_t k)
+                            const kdtree_index * idx,
+                            kdtree_index k)
 {
     printf("Query point: ");
     print_point(Q, ndim);
     printf("\n");
 
-    for(size_t kk = 0; kk< k; kk++)
+    for(kdtree_index kk = 0; kk< k; kk++)
     {
-        printf("#%zu ", idx[kk]);
+        printf("#%u ", idx[kk]);
         print_point(X + ndim*idx[kk], ndim);
         printf("\n");
     }
     return;
 }
 
-void test_align_dots(size_t N, int ndim)
+void test_align_dots(kdtree_index N, int ndim)
 {
-    printf("\n--> test_align_dots(%zu)\n", N);
+    printf("\n--> test_align_dots(%u)\n", N);
     double sigma = 1;
     printf("    sigma=%f\n", sigma);
 
@@ -533,9 +540,9 @@ void test_align_dots(size_t N, int ndim)
     double dy = 2.67;
     double dz = -1.001;
     printf("    delta = (%.2f, %.2f, %.2f)\n", dx, dy, dz);
-    size_t ncommon = 5;
+    kdtree_index ncommon = 5;
     ncommon > N ? ncommon = N : 0;
-    for(size_t kk = 0; kk < ncommon; kk++)
+    for(kdtree_index kk = 0; kk < ncommon; kk++)
     {
         B[3*kk + 0] = A[3*kk + 0] + dx;
         B[3*kk + 1] = A[3*kk + 1] + dy;
@@ -548,13 +555,14 @@ void test_align_dots(size_t N, int ndim)
     kdtree_t * TA = kdtree_new(A, N, ndim, 10);
     assert(TA != NULL);
     struct dvarray * arr = dvarray_new(N, ndim);
-    size_t nfound_total = 0;
-    for(size_t kk = 0; kk < N; kk++)
+    kdtree_index nfound_total = 0;
+    u32 * A_idx = NULL;
+    u32 A_idx_capacity = 0;
+    for(kdtree_index kk = 0; kk < N; kk++)
     {
         double * Q = B + 3*kk;
-        size_t nfound = 0;
-        size_t * A_idx = kdtree_query_radius(TA, Q, pairing_radius, &nfound);
-        for(size_t ll = 0; ll < nfound; ll++)
+        kdtree_index nfound = kdtree_query_radius(TA, Q, pairing_radius, &A_idx, &A_idx_capacity);
+        for(kdtree_index ll = 0; ll < nfound; ll++)
         {
             double * P = A + 3*A_idx[ll];
             double D[3] = {0};
@@ -564,9 +572,10 @@ void test_align_dots(size_t N, int ndim)
             dvarray_insert_vector(arr, D);
         }
         nfound_total += nfound;
-        free(A_idx);
     }
-    printf("Found %zu pairs within the capture radius\n", nfound_total);
+    free(A_idx);
+
+    printf("Found %u pairs within the capture radius\n", nfound_total);
     kdtree_free(TA); TA = NULL;
     free(A); A = NULL;
     free(B); B = NULL;
@@ -632,36 +641,38 @@ void test_align_dots(size_t N, int ndim)
     return;
 }
 
-void test_query_radius(size_t N, int ndim, double radius)
+void test_query_radius(kdtree_index N, int ndim, double radius)
 {
-    printf("\n--> test_query_radius(N=%zu, ndim=%d, r=%f)\n", N, ndim, radius);
+    printf("\n--> test_query_radius(N=%u, ndim=%d, r=%f)\n", N, ndim, radius);
     double * X = rand_points(N, ndim);
     kdtree_t * T = kdtree_new(X, N, ndim, 10);
     assert(T != NULL);
-    size_t n = 0;
+
 
     struct timespec tstart, tend;
     clock_gettime(CLOCK_REALTIME, &tstart);
-    size_t * idx = kdtree_query_radius(T, X, radius, &n);
+    kdtree_index * idx = NULL;
+    u32 idx_capacity = 0;
+    kdtree_index n = kdtree_query_radius(T, X, radius, &idx, &idx_capacity);
     clock_gettime(CLOCK_REALTIME, &tend);
-    printf("Found %zu points in %f s\n", n, timespec_diff(&tend, &tstart));
-    size_t nshow = 10;
+    printf("Found %u points in %f s\n", n, timespec_diff(&tend, &tstart));
+    kdtree_index nshow = 10;
     if(n < nshow)
     {
         nshow = n;
     }
-    for(size_t kk = 0; kk < nshow; kk++)
+    for(kdtree_index kk = 0; kk < nshow; kk++)
     {
         double * p = X + ndim*idx[kk];
         printf("(%f, %f, %f), r = %f\n", p[0], p[1], p[1], eudist3(p, X, ndim));
     }
     if(nshow < n)
     {
-        printf("Showed %zu / %zu points\n", nshow, n);
+        printf("Showed %u / %u points\n", nshow, n);
     }
     clock_gettime(CLOCK_REALTIME, &tstart);
-    size_t n_brute_force = 0;
-    for(size_t kk = 0 ; kk<N; kk++)
+    kdtree_index n_brute_force = 0;
+    for(kdtree_index kk = 0 ; kk<N; kk++)
     {
         if( eudist3(X, X+ndim*kk, ndim) < radius)
         {
@@ -669,12 +680,12 @@ void test_query_radius(size_t N, int ndim, double radius)
         }
     }
     clock_gettime(CLOCK_REALTIME, &tend);
-    printf("Brute force found %zu points in %f s\n", n_brute_force, timespec_diff(&tend, &tstart));
+    printf("Brute force found %u points in %f s\n", n_brute_force, timespec_diff(&tend, &tstart));
     if(n == n_brute_force)
     {
         printf("Agreement with brute force\n");
     } else {
-        printf("Error: Brute force found %zu\n", n_brute_force);
+        printf("Error: Brute force found %u\n", n_brute_force);
         assert(0);
     }
     kdtree_free(T);
@@ -703,11 +714,11 @@ static fxx * random_points(u32 n, u32 ndim)
 // See the correct collisions are found
 // using kdtree_query_radius
 static
-void test_kdtree_query_radius_vs_bf(size_t N,
+void test_kdtree_query_radius_vs_bf(kdtree_index N,
                                     int ndim,
                                     __attribute__((unused)) double vq)
 {
-    printf("test_collision(%zu, %f)\n", N, vq);
+    printf("test_collision(%u, %f)\n", N, vq);
     fxx * X = random_points(N, ndim);
     assert(X != NULL);
     fxx radius = 2.0/cbrt(N);
@@ -720,27 +731,34 @@ void test_kdtree_query_radius_vs_bf(size_t N,
     assert(T != NULL);
 
     i8 * C = calloc(N, sizeof(i8));
+    assert(C != NULL);
     i8 * C2 = calloc(N, sizeof(i8));
+    assert(C2 != NULL);
     u64 n_found_total = 0;
+    u32 * result = NULL;
+    u32 result_capacity = 0;
     for(u32 kk = 0; kk < N; kk++) {
-
+        // X + ndim*kk is checked against all other points
         for(u32 ll = 0; ll < N; ll++) {
             C[ll] = eudist3_sq(X+ndim*kk, X+ndim*ll, ndim) < radius2;
         }
         memset(C2, 0, N);
-        size_t n_found;
-        size_t * result = kdtree_query_radius(T, X+3*kk, radius, &n_found);
-        for(size_t ll = 0; ll < n_found; ll++){
+        kdtree_index n_found= kdtree_query_radius(T, X+3*kk, radius, &result, &result_capacity);
+
+        for(kdtree_index ll = 0; ll < n_found; ll++){
             C2[result[ll]] = 1;
             n_found_total++;
         }
-        free(result);
+
         for(u32 ll = 0; ll < N; ll++) {
             if(C[ll] != C2[ll]) {
-                printf("[%f, %f, %f] vs [%f, %f, %f]\n",
+                printf("X[%u]=[%f, %f, %f] vs X[%u][%f, %f, %f]\n",
+                       kk,
                        X[3*kk], X[3*kk+1], X[3*kk+2],
+                       ll,
                        X[3*ll], X[3*ll+1], X[3*ll+2]);
-                printf("distance = %f, bf=%d, kdtree=%d\n",
+                printf("query radius = %f, distance = %f, bf=%d, kdtree=%d\n",
+                       radius,
                        eudist3(X+ndim*kk, X+ndim*ll, ndim),
                        C[ll], C2[ll]);
                 printf("test_collision failed\n");
@@ -748,6 +766,7 @@ void test_kdtree_query_radius_vs_bf(size_t N,
             }
         }
     }
+    free(result);
     printf("Found %lu collisions, everything matches brute force\n", n_found_total);
     kdtree_free(T);
     free(C);
@@ -757,11 +776,11 @@ void test_kdtree_query_radius_vs_bf(size_t N,
 
 typedef struct {
     i8 * C;
-    size_t N;
+    kdtree_index N;
 } cb1_struct;
 
 typedef struct {
-    size_t N;
+    kdtree_index N;
 } cb2_struct;
 
 
@@ -780,9 +799,9 @@ void test_cb2(__attribute__((unused)) u32 u,
 }
 
 
-void test_kdtree_collide(size_t N, int ndim)
+void test_kdtree_collide(kdtree_index N, int ndim)
 {
-    printf("test_kdtree_collide(N=%zu, ndim=%d)\n", N, ndim);
+    printf("test_kdtree_collide(N=%u, ndim=%d)\n", N, ndim);
     fxx * X = random_points(N, ndim);
     assert(X != NULL);
     fxx radius = 2.0/cbrt(N);
@@ -810,7 +829,7 @@ void test_kdtree_collide(size_t N, int ndim)
     }
 
     assert(T != NULL);
-    cb1_struct cb_data = {};
+    cb1_struct cb_data = {0};
     cb_data.N = N;
     cb_data.C = C2;
 
@@ -852,9 +871,9 @@ void test_kdtree_collide(size_t N, int ndim)
 }
 
 static void
-benchmark_kdtree_collide(size_t N, int ndim)
+benchmark_kdtree_collide(kdtree_index N, int ndim)
 {
-    printf("test_kdtree_collide(%zu)\n", N);
+    printf("test_kdtree_collide(%u)\n", N);
     fxx * X = random_points(N, ndim);
     assert(X != NULL);
     fxx radius = 2.0/cbrt(N);
@@ -869,7 +888,7 @@ benchmark_kdtree_collide(size_t N, int ndim)
     }
 
     assert(T != NULL);
-    cb2_struct cb_data = {};
+    cb2_struct cb_data = {0};
     cb_data.N = 0;
 
 
@@ -891,99 +910,106 @@ void gen_benchmark_table(int ndim, int k, int binsize)
     printf("| method | N    | t_construct [ms] | t_query [ms] | t_total [ms] |\n");
     printf("| ---    | ---: | ---:             | ---:         | --:          |\n");
 
-        for(u32 N = 128; N < 2<<21; N*=2)
+    for(u32 N = 128; N < 2<<21; N*=2)
+    {
+        double * X = rand_points(N, ndim);
+
+        struct timespec tstart, tend;
+        clock_gettime(CLOCK_REALTIME, &tstart);
+        kdtree_t * T = kdtree_new(X, N, ndim, binsize);
+        if(T == NULL)
         {
-            double * X = rand_points(N, ndim);
-
-            struct timespec tstart, tend;
-            clock_gettime(CLOCK_REALTIME, &tstart);
-            kdtree_t * T = kdtree_new(X, N, ndim, binsize);
-            if(T == NULL)
-            {
-                printf("Could not construct a kd-tree\n");
-                exit(EXIT_FAILURE);
-            }
-            clock_gettime(CLOCK_REALTIME, &tend);
-            double t_build_tree = timespec_diff(&tend, &tstart);
-
-
-            clock_gettime(CLOCK_REALTIME, &tstart);
-            size_t dummy = 0;
-            for(size_t kk = 0; kk<N; kk++)
-            {
-                //printf("\n-> Q: %zu (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
-                size_t * knn = kdtree_query_knn(T, X+ndim*kk, k);
-
-                for(int kk = 0; kk<3; kk++)
-                {
-                    dummy += knn[kk];
-                    //printf("%zu ", knn[kk]);
-                }
-                //printf("\n");
-            }
-            assert(dummy > 0);
-            clock_gettime(CLOCK_REALTIME, &tend);
-            double t_scan = timespec_diff(&tend, &tstart);
-
-            printf("| kdtree | %u | %.3f | %.3f | %.3f |\n",
-                   N,
-                   1000.0*t_build_tree,
-                   1000.0*t_scan,
-                   1000.0*(t_build_tree + t_scan));
+            printf("Could not construct a kd-tree\n");
+            exit(EXIT_FAILURE);
         }
+        clock_gettime(CLOCK_REALTIME, &tend);
+        double t_build_tree = timespec_diff(&tend, &tstart);
+
+
+        clock_gettime(CLOCK_REALTIME, &tstart);
+        kdtree_index dummy = 0;
+        for(kdtree_index kk = 0; kk<N; kk++)
+        {
+            //printf("\n-> Q: %u (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
+            kdtree_index * knn = kdtree_query_knn(T, X+ndim*kk, k);
+
+            for(int kk = 0; kk<3; kk++)
+            {
+                dummy += knn[kk];
+                //printf("%u ", knn[kk]);
+            }
+            //printf("\n");
+        }
+        assert(dummy > 0);
+        clock_gettime(CLOCK_REALTIME, &tend);
+        double t_scan = timespec_diff(&tend, &tstart);
+
+        printf("| kdtree | %u | %.3f | %.3f | %.3f |\n",
+               N,
+               1000.0*t_build_tree,
+               1000.0*t_scan,
+               1000.0*(t_build_tree + t_scan));
+        free(X);
+        kdtree_free(T);
+    }
     printf("\n");
 }
 
 void gen_benchmark_table_query_distance(int ndim, int binsize)
 {
 
-    size_t n_found_total = 0;
+    kdtree_index n_found_total = 0;
     printf("\n--> gen_benchmark_table_query_distance(ndim=%d, binsize=%d)\n",
            ndim, binsize);
     printf("| method | N    | t_construct [ms] | t_query [ms] | t_total [ms] |\n");
     printf("| ---    | ---: | ---:             | ---:         | --:          |\n");
 
-        for(u32 N = 128; N < 2<<21; N*=2)
+    kdtree_index * knn = NULL;
+    u32 knn_capacity = 0;
+    for(u32 N = 128; N < 2<<21; N*=2)
+    {
+        double * X = rand_points(N, ndim);
+
+        struct timespec tstart, tend;
+        clock_gettime(CLOCK_REALTIME, &tstart);
+        kdtree_t * T = kdtree_new(X, N, ndim, binsize);
+        if(T == NULL)
         {
-            double * X = rand_points(N, ndim);
-
-            struct timespec tstart, tend;
-            clock_gettime(CLOCK_REALTIME, &tstart);
-            kdtree_t * T = kdtree_new(X, N, ndim, binsize);
-            if(T == NULL)
-            {
-                printf("Could not construct a kd-tree\n");
-                exit(EXIT_FAILURE);
-            }
-            clock_gettime(CLOCK_REALTIME, &tend);
-            double t_build_tree = timespec_diff(&tend, &tstart);
-            clock_gettime(CLOCK_REALTIME, &tstart);
-            double radius =  2.0/cbrt(N);
-            for(size_t kk = 0; kk<N; kk++)
-            {
-                //printf("\n-> Q: %zu (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
-                size_t n_found = 0;
-                size_t * knn = kdtree_query_radius(T, X+ndim*kk, radius, &n_found);
-                n_found_total += n_found;
-                free(knn);
-            }
-            clock_gettime(CLOCK_REALTIME, &tend);
-            double t_scan = timespec_diff(&tend, &tstart);
-
-            printf("| kdtree | %u | %.3f | %.3f | %.3f |\n",
-                   N,
-                   1000.0*t_build_tree,
-                   1000.0*t_scan,
-                   1000.0*(t_build_tree + t_scan));
+            printf("Could not construct a kd-tree\n");
+            exit(EXIT_FAILURE);
         }
+        clock_gettime(CLOCK_REALTIME, &tend);
+        double t_build_tree = timespec_diff(&tend, &tstart);
+        clock_gettime(CLOCK_REALTIME, &tstart);
+        double radius =  2.0/cbrt(N);
+
+        for(kdtree_index kk = 0; kk<N; kk++)
+        {
+            //printf("\n-> Q: %u (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
+            kdtree_index n_found = kdtree_query_radius(T, X+ndim*kk, radius, &knn, &knn_capacity);
+            n_found_total += n_found;
+        }
+
+        clock_gettime(CLOCK_REALTIME, &tend);
+        double t_scan = timespec_diff(&tend, &tstart);
+
+        printf("| kdtree | %u | %.3f | %.3f | %.3f |\n",
+               N,
+               1000.0*t_build_tree,
+               1000.0*t_scan,
+               1000.0*(t_build_tree + t_scan));
+        free(X);
+        kdtree_free(T);
+    }
+    free(knn);
     printf("\n");
-    printf("n_found=%zu\n", n_found_total);
+    printf("n_found=%u\n", n_found_total);
 }
 
-void benchmark(size_t N, int ndim, int k, int binsize)
+void benchmark(kdtree_index N, int ndim, int k, int binsize)
 {
-    printf("\n--> benchmark(N=%zu, k=%d, binsize=%d)\n",
-           N, k, binsize);
+    printf("\n--> benchmark(N=%u, ndim=%d, k=%d, binsize=%d)\n",
+           N, ndim, k, binsize);
     double * X = rand_points(N, ndim);
 
     struct timespec tstart, tend;
@@ -1001,16 +1027,16 @@ void benchmark(size_t N, int ndim, int k, int binsize)
 
     clock_gettime(CLOCK_REALTIME, &tstart);
     printf("-> %d-NN, all vs all\n", k);
-    size_t dummy = 0;
-    for(size_t kk = 0; kk<N; kk++)
+    kdtree_index dummy = 0;
+    for(kdtree_index kk = 0; kk<N; kk++)
     {
-        //printf("\n-> Q: %zu (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
-        size_t * knn = kdtree_query_knn(T, X+ndim*kk, k);
+        //printf("\n-> Q: %u (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
+        kdtree_index * knn = kdtree_query_knn(T, X+ndim*kk, k);
 
         for(int kk = 0; kk<3; kk++)
         {
             dummy += knn[kk];
-            //printf("%zu ", knn[kk]);
+            //printf("%u ", knn[kk]);
         }
         //printf("\n");
     }
@@ -1019,20 +1045,20 @@ void benchmark(size_t N, int ndim, int k, int binsize)
     clock_gettime(CLOCK_REALTIME, &tend);
     double t_all_knn = timespec_diff(&tend, &tstart);
 
-    printf("To find %d-NN for all %zu points took %f s\n", k, N, t_all_knn);
+    printf("To find %d-NN for all %u points took %f s\n", k, N, t_all_knn);
     printf("Total time: %f s\n", t_build_tree + t_all_knn);
 
 
 #ifndef NDEBUG
     printf("-> Validation\n");
-    for(size_t kk = 0; kk<N; kk++)
+    for(kdtree_index kk = 0; kk<N; kk++)
     {
         if(kk % 1000 == 0)
         {
-            printf("\r %zu / %zu", kk, N); fflush(stdout);
+            printf("\r %u / %u", kk, N); fflush(stdout);
         }
-        double * Q = X+ndim*kk;
-        size_t * knn = kdtree_query_knn(T, Q, k);
+        double * Q = X + ndim*kk;
+        kdtree_index * knn = kdtree_query_knn(T, Q, k);
         bool ok = true;
         if(knn != NULL)
         {
@@ -1055,6 +1081,7 @@ void benchmark(size_t N, int ndim, int k, int binsize)
         if(!ok)
         {
             printf("\nERROR: Did not find the correct points\n");
+            printf("%s, %d\n", __FILE__, __LINE__);
             all_ok = false;
         }
         if(!all_ok)
@@ -1065,7 +1092,7 @@ void benchmark(size_t N, int ndim, int k, int binsize)
             exit(EXIT_FAILURE);
         }
     }
-    printf("\r %zu / %zu\n", N, N);
+    printf("\r %u / %u\n", N, N);
 #endif
     kdtree_free(T);
     free(X);
@@ -1104,7 +1131,7 @@ int main(int argc, char ** argv)
         }
     }
 
-    size_t N = 1000;
+    kdtree_index N = 1000;
     int k = 5;
     int binsize = 20;
     if(argc > 1) {
@@ -1116,8 +1143,10 @@ int main(int argc, char ** argv)
     if(argc > 3){
         binsize = atoi(argv[3]);
     }
-    printf("N = %zu, k = %d, binsize = %d\n", N, k, binsize);
-
+    printf("N = %u, k = %d, binsize = %d\n", N, k, binsize);
+    if(N < 1){
+        exit(EXIT_FAILURE);
+    }
     benchmark(N, 3, k, binsize);
     benchmark_kdtree_collide(10000, 3);
 

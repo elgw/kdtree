@@ -5,6 +5,13 @@ LDFLAGS=-lm -lpthread
 
 SAN?=0
 DEBUG?=0
+DEBUG2?=0
+
+ifeq ($(DEBUG2),1)
+# This will have a huge impact on performance
+CFLAGS+=-DKDTREE_DEBUG
+DEBUG=1
+endif
 
 ifeq ($(SAN),1)
 CFLAGS+=-fsanitize=address

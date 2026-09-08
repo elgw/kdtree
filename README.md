@@ -1,6 +1,6 @@
 # K-d tree algorithm/data structure
 
-Version 0.2.0 2026-09-17.
+Version 0.2.1 2026-09-17.
 
 The [K-d tree](https://en.wikipedia.org/wiki/K-d_tree) is a fun data
 structure, useful for finding k-nearest neighbours and neighbours
@@ -347,6 +347,12 @@ this to your `CMakeLists.txt`:
 - [ ] More validation.
 
 ## History
+
+0.2.1, 2026-09-08
+
+ - Internal change: Using `uint32_t`, not `size_t` for point and node indexing.
+ - API breaking: `kdtree_query_radius` got a new api.
+ - Removal: `kdtree_query_nearest`, use `kdtree_query_knn` instead.
 
 0.2.0, 2026-09-07
 
