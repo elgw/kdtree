@@ -15,7 +15,6 @@ endif
 
 ifeq ($(SAN),1)
 CFLAGS+=-fsanitize=address
-DEBUG=1
 endif
 
 ifeq ($(DEBUG),1)

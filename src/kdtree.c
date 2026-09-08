@@ -36,7 +36,14 @@ struct kdtree_node_struct {
 };
 
 struct kdtree_struct {
+    //
+    // Settings/ configuration
+    //
+
     u32 ndim; // Number of dimensions
+    // Maximum number of points per leaf (i.e. end node)
+    kdtree_index max_leaf_size;
+    kdtree_index n_point; // Number of supplied points
 
     //
     // Per node / region data.
@@ -63,27 +70,6 @@ struct kdtree_struct {
     // T->OID + node->point_offset
     double * X;
     kdtree_index * OID; // original id
-
-    // Maximum number of points per leaf (i.e. end node)
-    kdtree_index max_leaf_size;
-    kdtree_index n_point; // Number of supplied points
-
-    // Temporary buffer used during tree construction
-    double * median_buffer;
-
-    // at least ndim*sizeof(double) large
-    double * point_buffer;
-
-    //
-    // State variables for querying the closest points, should not be
-    // here really. Must have had a lazy day. TODO
-    //
-    struct pqheap * pq; // used for k-nearest queries
-    int direct_path;
-    // The latest query is stored internally to avoid an abundant
-    // number of malloc/free. Can of course be copied by the caller. */
-    kdtree_index * result; // KN for storing idx of K neighbours
-    kdtree_index result_alloc; /* number of elements allocated for result */
 };
 
 // Resolve the index of the right child based on the index of the
@@ -225,33 +211,6 @@ void kdtree_free(kdtree_t * T)
     free(T->OID);
     free(T->X);
     free(T->nodes);
-    if(T->pq != NULL) {
-        pqheap_free(&T->pq);
-    }
-    free(T->result);
-    free(T->point_buffer);
-    free(T);
-    return;
-}
-
-kdtree_t * kdtree_copy_shallow(kdtree_t * _T)
-{
-    assert(_T != NULL);
-    if(_T == NULL)
-        return NULL;
-    kdtree_t * T = calloc(1, sizeof(kdtree_t));
-    assert(T != NULL);
-    memcpy(T, _T, sizeof(kdtree_t));
-    T->result = NULL;
-    T->result_alloc = 0;
-    T->pq = NULL;
-    return T;
-}
-
-void kdtree_free_shallow(kdtree_t * T)
-{
-    pqheap_free(&T->pq);
-    free(T->result);
     free(T);
     return;
 }
@@ -331,7 +290,8 @@ print_bbx(const double * bbx, int ndim)
 /* Recursive splitting  */
 void
 kdtree_split(kdtree_t * T,
-             kdtree_index node_id)
+             kdtree_index node_id,
+             double * median_buffer)
 {
     kdtree_node_t * node = T->nodes + node_id;
 
@@ -375,7 +335,7 @@ kdtree_split(kdtree_t * T,
                                  // belongs to the node
                                  T->X + node->point_offset*T->ndim + split_dim,
                                  node->n_point,
-                                 T->median_buffer,
+                                 median_buffer,
                                  T->ndim);
     //printf("split_dim = %u, pivot = %f, from %u points\n", split_dim, pivot, node->n_point);
     node->pivot = pivot;
@@ -417,7 +377,7 @@ kdtree_split(kdtree_t * T,
         assert(bbx_left[2*split_dim] < pivot);
         node_left->n_point = nLow;
         node_left->point_offset = node->point_offset;
-        kdtree_split(T, left_id);
+        kdtree_split(T, left_id, median_buffer);
     }
 
     {
@@ -432,7 +392,7 @@ kdtree_split(kdtree_t * T,
         assert(bbx_right[2*split_dim+1] > pivot);
         node_right->n_point = nHigh;
         node_right->point_offset = node->point_offset + nLow;
-        kdtree_split(T, right_id);
+        kdtree_split(T, right_id, median_buffer);
     }
 
     return;
@@ -490,10 +450,8 @@ kdtree_new(const double * X,
         T->OID[kk] = kk;
     }
 
-    T->point_buffer = malloc(ndim*sizeof(double));
-    if(T->point_buffer == NULL) { goto failTree; }
-    T->median_buffer = calloc(N, sizeof(double));
-    if(T->median_buffer == NULL) { goto failTree; }
+    double * median_buffer = calloc(N, sizeof(double));
+    if(median_buffer == NULL) { goto failTree; }
 
     // Create the root node
     kdtree_node_t * node = T->nodes;
@@ -504,10 +462,10 @@ kdtree_new(const double * X,
 
     // Recursive construction
     kdtree_split(T, // Tree
-                 0); // node_id (location in array)
+                 0,
+                 median_buffer); // node_id (location in array)
 
-    free(T->median_buffer);
-    T->median_buffer = NULL;
+    free(median_buffer);
 #ifdef KDTREE_DEBUG
     kdtree_validate(T);
 #endif
@@ -558,26 +516,29 @@ aa_box_hit_sphere_test(const double * restrict bbx,
 static int
 bounds_overlap_ball(const kdtree_t * T,
                     const kdtree_node_t * node,
-                    const double * Q)
+                    const double * Q,
+                    double * point_buffer,
+                    double rmax)
 {
-
-    const double rmax = pqheap_get_max_value(T->pq);
     return aa_box_hit_sphere_test(T->boxes + T->ndim*2*node->id,
                                   T->ndim, Q, rmax,
-                                  T->point_buffer);
+                                  point_buffer);
 }
 
 // Recursive search until no more points can be found
 //  Return 1 if we are done
 //  Return 0 else
 static int
-kdtree_search_knn(kdtree_t * T, const kdtree_node_t * node, const double * Q)
+kdtree_search_knn(const kdtree_t * T,
+                  const kdtree_node_t * node,
+                  const double * Q,
+                  pqheap_t * pq,
+                  int * direct_path,
+                  double * point_buffer)
 {
-    pqheap_t * pq = T->pq;
-
     if(node_is_final(T, node))
     {
-        T->direct_path = 0;
+        *direct_path = 0;
 
         // Add all points
         for(kdtree_index kk = 0; kk<node->n_point; kk++)
@@ -593,7 +554,7 @@ kdtree_search_knn(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         // what if the leaf contain less than the wanted number of points? TODO
         double rmax = sqrt(pqheap_get_max_value(pq));
         int done = within_bounds(T->boxes + 2*T->ndim*node->id,
-                                  T->ndim, Q, rmax);
+                                 T->ndim, Q, rmax);
         return done;
     }
 
@@ -604,18 +565,26 @@ kdtree_search_knn(kdtree_t * T, const kdtree_node_t * node, const double * Q)
     if(Q[split_dim] > node->pivot)
     {
         // correct direction
-        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q))
+        if(*direct_path || bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q, point_buffer, pqheap_get_max_value(pq)))
         {
-            done = kdtree_search_knn(T, T->nodes + node_right_child_id(node->id), Q);
+            done = kdtree_search_knn(T,
+                                     T->nodes + node_right_child_id(node->id),
+                                     Q,
+                                     pq,
+                                     direct_path, point_buffer);
             if(done == 1)
             {
                 return done;
             }
         }
         // "wrong direction"
-        if(bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
+        if(bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q, point_buffer, pqheap_get_max_value(pq)))
         {
-            done = kdtree_search_knn(T, T->nodes + node_left_child_id(node->id), Q);
+            done = kdtree_search_knn(T,
+                                     T->nodes + node_left_child_id(node->id),
+                                     Q,
+                                     pq,
+                                     direct_path, point_buffer);
             if(done == 1)
             {
                 return done;
@@ -623,9 +592,13 @@ kdtree_search_knn(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         }
     } else {
         // "correct" direction
-        if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
+        if(*direct_path || bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q, point_buffer, pqheap_get_max_value(pq)))
         {
-            done = kdtree_search_knn(T, T->nodes + node_left_child_id(node->id), Q);
+            done = kdtree_search_knn(T,
+                                     T->nodes + node_left_child_id(node->id),
+                                     Q,
+                                     pq,
+                                     direct_path, point_buffer);
             if(done)
             {
                 return 1;
@@ -633,9 +606,13 @@ kdtree_search_knn(kdtree_t * T, const kdtree_node_t * node, const double * Q)
         }
 
         // "wrong" direction
-        if(bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q))
+        if(bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q, point_buffer, pqheap_get_max_value(pq)))
         {
-            done = kdtree_search_knn(T, T->nodes + node_right_child_id(node->id), Q);
+            done = kdtree_search_knn(T,
+                                     T->nodes + node_right_child_id(node->id),
+                                     Q,
+                                     pq,
+                                     direct_path, point_buffer);
         }
         if(done)
         {
@@ -655,7 +632,7 @@ kdtree_search_knn(kdtree_t * T, const kdtree_node_t * node, const double * Q)
     return 0;
 }
 
-kdtree_index * kdtree_query_knn(kdtree_t * T, const double * Q, kdtree_index k)
+kdtree_index * kdtree_query_knn(const kdtree_t * T, const double * Q, kdtree_index k)
 {
     if(k > T->n_point) {
         fprintf(stderr,
@@ -664,35 +641,24 @@ kdtree_index * kdtree_query_knn(kdtree_t * T, const double * Q, kdtree_index k)
         return NULL;
     }
 
-    // If k changed from the last query, update:
-    if(T->result_alloc != k) {
-        if(T->pq != NULL)
-        {
-            pqheap_free(&T->pq);
-        }
-        T->pq = NULL;
-        free(T->result);
-        T->result = NULL;
-        T->result_alloc = 0;
-    }
-
-    // Set up priority queue
-    if(T->pq == NULL){
-        T->pq = pqheap_new(k);
-    }
-    pqheap_t * pq = T->pq;
+    pqheap_t * pq = pqheap_new(k);
+    double * point_buffer = malloc(T->ndim*sizeof(double));
+    assert(pq != NULL);
     pq->n = 0;
+    // Important that a large distance is inserted
+    // or the scan will not search wide enough
     pqheap_insert(pq, 1e99, 0);
 
-
-    if(T->result == NULL){
-        T->result = calloc(k, sizeof(kdtree_index));
-        assert(T->result != NULL);
-    }
+    // As long as direct_path == 1, the method will crawl towards
+    // the node containing the query point, after that the search will expand
+    // backwards
+    int direct_path = 1;
 
     // Traverse the tree
-    T->direct_path = 1;
-    kdtree_search_knn(T, T->nodes, Q);
+    kdtree_search_knn(T, T->nodes, Q, pq, &direct_path, point_buffer);
+
+    // Assembly the output and return
+    kdtree_index * result = calloc(k, sizeof(kdtree_index));
 
     // Move resulting indices from pq to array
     for(kdtree_index kk = 0; kk<k; kk++){
@@ -700,10 +666,11 @@ kdtree_index * kdtree_query_knn(kdtree_t * T, const double * Q, kdtree_index k)
         uint64_t idx = 0;
         pqheap_pop(pq, &val, &idx);
         //printf("Popped: %lu, d = %f\n", idx, val);
-        T->result[k-kk-1] = idx;
+        result[k-kk-1] = idx;
     }
-
-    return T->result;
+    pqheap_free(&pq);
+    free(point_buffer);
+    return result;
 }
 
 
@@ -736,12 +703,13 @@ _kdtree_query_radius(const kdtree_t * T,
                      kdtree_index node_id,
                      const double r,
                      const double r2,
-                     struct darray * res)
+                     struct darray * res,
+                     double * point_buffer)
 {
     kdtree_node_t * node = T->nodes + node_id;
     if( ! aa_box_hit_sphere_test(T->boxes + T->ndim*2*node->id,
                                  T->ndim, Q, r2,
-                                 T->point_buffer) ) {
+                                 point_buffer) ) {
         return;
     }
 
@@ -764,10 +732,12 @@ _kdtree_query_radius(const kdtree_t * T,
     // if (x_intersect) if (y_intersect) if (z_intersect) then traverse ...
     _kdtree_query_radius(T, Q,
                          node_left_child_id(node_id),
-                         r, r2, res);
+                         r, r2, res,
+                         point_buffer);
     _kdtree_query_radius(T, Q,
                          node_right_child_id(node_id),
-                         r, r2, res);
+                         r, r2, res,
+                         point_buffer);
     return;
 }
 
@@ -787,9 +757,9 @@ kdtree_query_radius(const kdtree_t * T,
         res->n_alloc = *result_capacity;
         res->data = result[0];
     }
-
-    _kdtree_query_radius(T, Q, 0, radius, pow(radius, 2), res);
-
+    double * point_buffer = malloc(T->ndim*sizeof(double));
+    _kdtree_query_radius(T, Q, 0, radius, pow(radius, 2), res, point_buffer);
+    free(point_buffer);
     *result = res->data;
     u32 nfound = res->n_used;
     *result_capacity = res->n_alloc;
@@ -813,13 +783,14 @@ _kdtree_kde_mean(const kdtree_t * T,
                  const double sigma22,
                  double * xmeank,
                  double * meank,
-                 kdtree_index * npoint)
+                 kdtree_index * npoint,
+                 double * point_buffer)
 {
 
     kdtree_node_t * node = T->nodes + node_id;
     /* Termination condition */
     if( ! aa_box_hit_sphere_test(T->boxes + T->ndim*2*node->id,
-                                 T->ndim, Q, r2, T->point_buffer) )
+                                 T->ndim, Q, r2, point_buffer) )
     {
         return;
     }
@@ -852,12 +823,12 @@ _kdtree_kde_mean(const kdtree_t * T,
     _kdtree_kde_mean(T, Q,
                      node_left_child_id(node_id),
                      r2, sigma22,
-                     xmeank, meank, npoint);
+                     xmeank, meank, npoint, point_buffer);
 
     _kdtree_kde_mean(T, Q,
                      node_right_child_id(node_id),
                      r2, sigma22,
-                     xmeank, meank, npoint);
+                     xmeank, meank, npoint, point_buffer);
 
     return;
 }
@@ -867,11 +838,12 @@ _kdtree_kde(const kdtree_t * T,
             const double * Q,
             kdtree_index node_id,
             const double r2,
-            const double sigma22)
+            const double sigma22,
+            double * point_buffer)
 {
     kdtree_node_t * node = T->nodes + node_id;
     if( ! aa_box_hit_sphere_test(T->boxes + T->ndim*2*node->id,
-                                 T->ndim, Q, r2, T->point_buffer) )
+                                 T->ndim, Q, r2, point_buffer) )
     {
         return 0;
     }
@@ -899,11 +871,11 @@ _kdtree_kde(const kdtree_t * T,
 
     kde += _kdtree_kde(T, Q,
                        node_left_child_id(node_id),
-                       r2, sigma22);
+                       r2, sigma22, point_buffer);
 
     kde += _kdtree_kde(T, Q,
                        node_right_child_id(node_id),
-                       r2, sigma22);
+                       r2, sigma22, point_buffer);
 
     return kde;
 }
@@ -921,7 +893,10 @@ double kdtree_kde(const kdtree_t * T,
     {
         r = cutoff*sigma;
     }
-    return _kdtree_kde(T, Q, 0, pow(r,2.0), 2.0*pow(sigma, 2.0));
+    double * point_buffer = malloc(T->ndim*sizeof(double));
+    double kde = _kdtree_kde(T, Q, 0, pow(r,2.0), 2.0*pow(sigma, 2.0), point_buffer);
+    free(point_buffer);
+    return kde;
 }
 
 void
@@ -940,14 +915,17 @@ kdtree_kde_mean(const kdtree_t * T,
     double meank = 0;
     kdtree_index npoint = 0;
 
+    double * point_buffer = malloc(T->ndim*sizeof(double));
+    assert(point_buffer != NULL);
     _kdtree_kde_mean(T, Q,
                      0, // start node == root
                      pow(r,2.0), // radius squared
                      2.0*pow(sigma, 2.0), // divisor for exponent
                      xmeank, // accumulate positions
                      &meank, // accumulate kernel values
-                     &npoint); // number of points
-
+                     &npoint,
+                     point_buffer); // number of points
+    free(point_buffer);
     if(meank < 1e-9)
     {
         memcpy(mean, Q, 3*sizeof(double));
@@ -967,6 +945,7 @@ internal_kdtree_collide(const kdtree_t * T,
                         i64 u,
                         kdtree_index node_id,
                         const double r2,
+                        double * point_buffer,
                         kdtree_collide_cb cb_fun,
                         void * cb_data)
 
@@ -974,7 +953,7 @@ internal_kdtree_collide(const kdtree_t * T,
     const double * Q = T->X + T->ndim*u;
     kdtree_node_t * node = T->nodes + node_id;
     if( ! aa_box_hit_sphere_test(T->boxes + T->ndim*2*node->id,
-                                 T->ndim, Q, r2, T->point_buffer) )
+                                 T->ndim, Q, r2, point_buffer) )
     {
         return;
     }
@@ -999,10 +978,12 @@ internal_kdtree_collide(const kdtree_t * T,
 
     internal_kdtree_collide(T, u,
                             node_left_child_id(node_id),
-                            r2, cb_fun, cb_data);
+                            r2, point_buffer,
+                            cb_fun, cb_data);
     internal_kdtree_collide(T, u,
                             node_right_child_id(node_id),
-                            r2, cb_fun, cb_data);
+                            r2, point_buffer,
+                            cb_fun, cb_data);
     return;
 }
 
@@ -1013,13 +994,17 @@ kdtree_collide(const kdtree_t * T,
                kdtree_collide_cb cb_fun,
                void * cb_data)
 {
+    double * point_buffer = malloc(T->ndim*sizeof(double));
+    assert(point_buffer != NULL);
     for(u32 u = 0; u < T->n_point; u++) {
         internal_kdtree_collide(T,
                                 u,
                                 0, // root
                                 radius*radius,
+                                point_buffer,
                                 cb_fun,
                                 cb_data);
     }
+    free(point_buffer);
     return;
 }

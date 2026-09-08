@@ -218,5 +218,7 @@ void pqheap_free(pqheap_t ** Bp)
 
 double pqheap_get_max_value(pqheap_t * pq)
 {
+    assert(pq != NULL);
+    assert(pq->G != NULL);
     return pq->G[0].value;
 }

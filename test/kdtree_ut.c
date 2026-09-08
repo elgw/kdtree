@@ -20,93 +20,6 @@ typedef uint64_t u64;
 
 typedef uint32_t kdtree_index;
 
-// Struct for parallel queries
-typedef struct{
-    kdtree_t * T;
-    const double * Q;
-    kdtree_index nQ;
-    int k;
-    int thread;
-    int nthreads;
-    kdtree_index * KNN;
-} _p_query_t;
-
-
-/* For doing parallel queries */
-
-/* Query the nQ points in Q for the k nearest neighbors
- *
- * The returned matrix is kxN elements large and should be freed by
- * the caller.
- */
-kdtree_index * kdtree_query_knn_multi(kdtree_t * T,
-                                      const double * Q, kdtree_index nQ,
-                                      int k, int ntheads);
-
-
-void * _p_query(void * _config)
-{
-    _p_query_t * config = (_p_query_t *) _config;
-    kdtree_t * T = config->T;
-
-    const double * Q = config->Q;
-    const kdtree_index nQ = config->nQ;
-    const int k = config->k;
-    const int thread = config->thread;
-    const int nthreads = config->nthreads;
-    kdtree_index * KNN = config->KNN;
-    for(kdtree_index kk = thread; kk<nQ; kk+=nthreads)
-    {
-        kdtree_index * knn = kdtree_query_knn(T, Q+2*kk, k);
-        memcpy(KNN + k*kk, knn, k*sizeof(kdtree_index));
-    }
-    return NULL;
-}
-
-kdtree_index * kdtree_query_knn_multi(kdtree_t * T, const double * Q, kdtree_index nQ, int k, int nthreads)
-{
-    kdtree_index * KNN = calloc(nQ*k, sizeof(kdtree_index));
-    assert(KNN != NULL);
-
-    if(nthreads == 1)
-    {
-        for(kdtree_index kk = 0; kk<nQ; kk++)
-        {
-            kdtree_index * knn = kdtree_query_knn(T, Q+2*kk, k);
-            memcpy(KNN + k*kk, knn, k*sizeof(kdtree_index));
-        }
-        return KNN;
-    } else {
-        pthread_t * threads = calloc(nthreads, sizeof(pthread_t));
-        assert(threads != NULL);
-        _p_query_t * confs = calloc(nthreads, sizeof(_p_query_t));
-        assert(confs != NULL);
-
-        for(int kk = 0; kk<nthreads; kk++)
-        {
-            confs[kk].T = kdtree_copy_shallow(T);
-            confs[kk].thread = kk;
-            confs[kk].nthreads = nthreads;
-            confs[kk].KNN = KNN;
-            confs[kk].k = k;
-            confs[kk].Q = Q;
-            confs[kk].nQ = nQ;
-            pthread_create(&threads[kk], NULL, _p_query, (void *) &confs[kk]);
-        }
-
-        for(int kk = 0; kk<nthreads; kk++)
-        {
-            pthread_join(threads[kk], NULL);
-            kdtree_free_shallow(confs[kk].T);
-        }
-        free(confs);
-        free(threads);
-    }
-
-    return KNN;
-}
-
-
 /* Dynamic vector array */
 struct dvarray {
     double * data;
@@ -364,29 +277,6 @@ bool found_correct(double * X,
     return false;
 }
 
-void test_threads(kdtree_index N, int ndim, int k, int binsize)
-{
-    printf("\n--> test_threads(N=%u, d=%d, binsize=%d)\n",
-           N, k, binsize);
-    double * X = rand_points(N, ndim);
-
-    kdtree_t * T = kdtree_new(X, N, ndim, binsize);
-    assert(T != NULL);
-    // Timing with 1, ... 8 threads
-    for(int nthreads = 1; nthreads < 9; nthreads++)
-    {
-        struct timespec tstart, tend;
-        clock_gettime(CLOCK_REALTIME, &tstart);
-        kdtree_index * KNN = kdtree_query_knn_multi(T, X, N, k, nthreads);
-        free(KNN);
-        clock_gettime(CLOCK_REALTIME, &tend);
-        double t_query = timespec_diff(&tend, &tstart);
-        printf("Took %f s using %d threads\n", t_query, nthreads);
-    }
-    kdtree_free(T);
-    free(X);
-    return;
-}
 
 void basic_tests(kdtree_index N, int ndim, int max_leaf_size)
 {
@@ -419,6 +309,7 @@ void basic_tests(kdtree_index N, int ndim, int max_leaf_size)
     kdtree_index * idx = kdtree_query_knn(T, X, 5);
     printf("%u, %u, %u, %u, %u",
            idx[0], idx[1], idx[2], idx[3], idx[4]);
+    free(idx);
     free(X); X = NULL;
     kdtree_free(T); T = NULL;
 }
@@ -948,7 +839,7 @@ gen_benchmark_table_query_knn(int ndim, int k, int binsize)
                 dummy += knn[kk];
                 //printf("%u ", knn[kk]);
             }
-            //printf("\n");
+            free(knn);
         }
         assert(dummy > 0);
         clock_gettime(CLOCK_REALTIME, &tend);
@@ -1049,6 +940,7 @@ void kdtree_query_knn__test(kdtree_index N, int ndim, int k, int binsize)
             fprintf(stderr, "Got the wrong points %s %d\n", __FILE__, __LINE__);
             goto fail;
         }
+        free(knn);
     }
 
     kdtree_free(T);
@@ -1134,17 +1026,7 @@ int main(int argc, char ** argv)
 
     }
 
-    if(N > 100000 )
-    {
-        return EXIT_SUCCESS;
-    }
-
     test_align_dots(5000, 3);
-
-    test_threads(N,
-                 3, // nDim
-                 5, // kNN
-                 binsize);
 
     return EXIT_SUCCESS;
 }

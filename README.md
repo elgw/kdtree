@@ -150,15 +150,9 @@ $ ./kdtree_ut --table3
 
 </details>
 
-For reference, results from
-`sklearn.neighbors.NearestNeighbors` are also given (see `test_python.py` for the
-test code). Sklearn is probably an interface to
-[ckdtree](https://github.com/scipy/scipy/tree/main/scipy/spatial/ckdtree/src)
-but that is just a hypothesis, not a fact. The comparison is not fair,
-comparisons seldom are, since the Python code stores the full
-result (an Nxk matrix) at the end.
+### Compared to [sklearn.neighbors.KDTree](https://scikit-learn.org/stable/modules/generated/sklearn.neighbors.KDTree.html)
 
-In short, these lines were used:
+The benchmark is more or less, see `test/sklearn_test.py` for details.
 
 ``` Python
 NearestNeighbors(n_neighbors=k, algorithm='kd_tree').fit(X)
@@ -253,6 +247,10 @@ see `test/joergdietrich_libkdtree_test.c`. The points were f32 here,
 not f64 as in the other tests.
 
 <details><summary>Results, joergdietrich 3D 5NN</summary>
+
+``` shell
+$ test/joergdietrich_libkdtree
+```
 
 | method        |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
 |---------------|--------:|-----------------:|-------------:|-------------:|

@@ -41,10 +41,11 @@ PUB void kdtree_free(kdtree_t * T);
 // contains the index of k points, sorted according to the distance of
 // the points, with the closest point first.
 //
-// Important: The returned array is owned by the tree and should not
-// be freed. It will be re-used with the next call to kdtree_query_
+// The returned array is owned by the caller, and has k elements.
+//
+// The return value will be NULL on errors.
 PUB uint32_t *
-kdtree_query_knn(kdtree_t * T,
+kdtree_query_knn(const kdtree_t * T,
                  const double * Q,
                  uint32_t k);
 
