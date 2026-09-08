@@ -394,23 +394,29 @@ this to your `CMakeLists.txt`:
 
 ## History
 
-0.2.1, 2026-09-08
+0.2.2 - 2026-09-08
+
+- Improvement: `kdtree_query_knn` and `kdtree_query_radius` should be
+  thread save.
+- Added some tests
+
+0.2.1
 
  - Internal change: Using `uint32_t`, not `size_t` for point and node indexing.
  - API breaking: `kdtree_query_radius` got a new api.
  - Removal: `kdtree_query_nearest`, use `kdtree_query_knn` instead.
 
-0.2.0, 2026-09-07
+0.2.0
 
 - Improvement: should work with any number of dimensions
 - New: Callback interface for detecting collisions.
 - Bug fix: The box sphere intersection routine looked weird and is replaced.
 
-0.1.1, 2025-04-05,
+0.1.1
 
 -  Added `kdtree_kde_mean` for mean shift algorithms.
 
-0.1.0 2024-08-09.
+0.1.0
 
 - Hello world
 

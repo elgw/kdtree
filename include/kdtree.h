@@ -9,7 +9,7 @@
 
 #define KDTREE_VERSION_MAJOR 0
 #define KDTREE_VERSION_MINOR 2
-#define KDTREE_VERSION_PATCH 1
+#define KDTREE_VERSION_PATCH 2
 
 #ifdef WIN32
 #define PUB __declspec(dllexport)
