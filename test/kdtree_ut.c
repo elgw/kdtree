@@ -28,7 +28,8 @@ struct dvarray {
     int ndim;
 };
 
-static void dvarray_n_more(struct dvarray * A, kdtree_index nmore)
+static void
+dvarray_n_more(struct dvarray * A, kdtree_index nmore)
 {
     if(A->n_used + nmore >= A->n_alloc)
     {
@@ -51,7 +52,8 @@ static void dvarray_n_more(struct dvarray * A, kdtree_index nmore)
     }
 }
 
-static void dvarray_insert_vector(struct dvarray * A, const double * X)
+static void
+dvarray_insert_vector(struct dvarray * A, const double * X)
 {
     dvarray_n_more(A, 1);
     memcpy(A->data + A->ndim*A->n_used,
@@ -61,14 +63,16 @@ static void dvarray_insert_vector(struct dvarray * A, const double * X)
     return;
 }
 
-static void dvarray_free(struct dvarray * A)
+static void
+dvarray_free(struct dvarray * A)
 {
     free(A->data);
     free(A);
     return;
 }
 
-struct dvarray * dvarray_new(kdtree_index n, int ndim)
+struct dvarray *
+dvarray_new(kdtree_index n, int ndim)
 {
     assert(n > 0);
     struct dvarray * A = calloc(1, sizeof(struct dvarray));
@@ -80,7 +84,8 @@ struct dvarray * dvarray_new(kdtree_index n, int ndim)
     return A;
 }
 
-double * rand_points(kdtree_index N, int ndim)
+static double *
+rand_points(kdtree_index N, int ndim)
 {
     double * X = calloc(ndim*N, sizeof(double));
     assert(X != NULL);
