@@ -1,7 +1,5 @@
 # K-d tree algorithm/data structure
 
-Version 0.2.1 2026-09-17.
-
 The [K-d tree](https://en.wikipedia.org/wiki/K-d_tree) is a fun data
 structure, useful for finding k-nearest neighbours and neighbours
 within some distance in point clouds. The benefits it provides
