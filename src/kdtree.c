@@ -570,7 +570,8 @@ bounds_overlap_ball(const kdtree_t * T,
 // Recursive search until no more points can be found
 //  Return 1 if we are done
 //  Return 0 else
-static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double * Q)
+static int
+kdtree_search_knn(kdtree_t * T, const kdtree_node_t * node, const double * Q)
 {
     pqheap_t * pq = T->pq;
 
@@ -587,11 +588,12 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
             pqheap_insert(pq, d2, point_ID);
         }
 
+        // Check if the most distal point in the priority queue
+        // is confined within the bounding box of this leaf
+        // what if the leaf contain less than the wanted number of points? TODO
         double rmax = sqrt(pqheap_get_max_value(pq));
-
-        int done =  within_bounds(T->boxes + 2*T->ndim*node->id,
+        int done = within_bounds(T->boxes + 2*T->ndim*node->id,
                                   T->ndim, Q, rmax);
-        //printf("rmax = %f, done = %d\n", rmax, done);
         return done;
     }
 
@@ -604,7 +606,7 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
         // correct direction
         if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q))
         {
-            done = kdtree_search(T, T->nodes + node_right_child_id(node->id), Q);
+            done = kdtree_search_knn(T, T->nodes + node_right_child_id(node->id), Q);
             if(done == 1)
             {
                 return done;
@@ -613,7 +615,7 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
         // "wrong direction"
         if(bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
         {
-            done = kdtree_search(T, T->nodes + node_left_child_id(node->id), Q);
+            done = kdtree_search_knn(T, T->nodes + node_left_child_id(node->id), Q);
             if(done == 1)
             {
                 return done;
@@ -623,7 +625,7 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
         // "correct" direction
         if(T->direct_path || bounds_overlap_ball(T, T->nodes + node_left_child_id(node->id), Q))
         {
-            done = kdtree_search(T, T->nodes + node_left_child_id(node->id), Q);
+            done = kdtree_search_knn(T, T->nodes + node_left_child_id(node->id), Q);
             if(done)
             {
                 return 1;
@@ -633,7 +635,7 @@ static int kdtree_search(kdtree_t * T, const kdtree_node_t * node, const double 
         // "wrong" direction
         if(bounds_overlap_ball(T, T->nodes + node_right_child_id(node->id), Q))
         {
-            done = kdtree_search(T, T->nodes + node_right_child_id(node->id), Q);
+            done = kdtree_search_knn(T, T->nodes + node_right_child_id(node->id), Q);
         }
         if(done)
         {
@@ -674,7 +676,6 @@ kdtree_index * kdtree_query_knn(kdtree_t * T, const double * Q, kdtree_index k)
         T->result_alloc = 0;
     }
 
-
     // Set up priority queue
     if(T->pq == NULL){
         T->pq = pqheap_new(k);
@@ -691,7 +692,7 @@ kdtree_index * kdtree_query_knn(kdtree_t * T, const double * Q, kdtree_index k)
 
     // Traverse the tree
     T->direct_path = 1;
-    kdtree_search(T, T->nodes, Q);
+    kdtree_search_knn(T, T->nodes, Q);
 
     // Move resulting indices from pq to array
     for(kdtree_index kk = 0; kk<k; kk++){

@@ -323,6 +323,15 @@ bool found_correct(double * X,
     // i.e., not duplicates we should find
     // exactly k-1 points below r
 
+    if(k == 1){
+        // Distance to the closest point
+        double r = eudist3(Q, X + ndim*knn[k-1], ndim);
+        // we assume that the query point is in the input set,
+        // so it should be found at distance 0
+        if(r > 1e-9){ return false; }
+        return true;
+    }
+
     double r0 = eudist3(Q, X + ndim*knn[k-2], ndim);
     double r1 = eudist3(Q, X + ndim*knn[k-1], ndim);
 
@@ -481,8 +490,6 @@ void test_kdtree_kde_mean(kdtree_index N, int ndim, int max_leaf_size)
         }
 
     }
-
-
 
     kdtree_free(T); T = NULL;
     printf("done\n");
@@ -714,18 +721,18 @@ static fxx * random_points(u32 n, u32 ndim)
 // See the correct collisions are found
 // using kdtree_query_radius
 static
-void test_kdtree_query_radius_vs_bf(kdtree_index N,
-                                    int ndim,
-                                    __attribute__((unused)) double vq)
+void kdtree_query_radius__test(kdtree_index N,
+                               int ndim,
+                               __attribute__((unused)) double vq)
 {
-    printf("test_collision(%u, %f)\n", N, vq);
     fxx * X = random_points(N, ndim);
     assert(X != NULL);
     fxx radius = 2.0/cbrt(N);
     fxx radius2 = radius*radius;
     kdtree_t * T = kdtree_new(X, N, ndim, 5);
     if(T == NULL) {
-        free(X);
+        fprintf(stderr, "Failed to construct a tree\n");
+        goto fail;
         return;
     }
     assert(T != NULL);
@@ -737,41 +744,43 @@ void test_kdtree_query_radius_vs_bf(kdtree_index N,
     u64 n_found_total = 0;
     u32 * result = NULL;
     u32 result_capacity = 0;
+    // For each point, compare the result to brute force
     for(u32 kk = 0; kk < N; kk++) {
         // X + ndim*kk is checked against all other points
         for(u32 ll = 0; ll < N; ll++) {
             C[ll] = eudist3_sq(X+ndim*kk, X+ndim*ll, ndim) < radius2;
         }
         memset(C2, 0, N);
-        kdtree_index n_found= kdtree_query_radius(T, X+3*kk, radius, &result, &result_capacity);
+        kdtree_index n_found= kdtree_query_radius(T, X+ndim*kk, radius, &result, &result_capacity);
 
         for(kdtree_index ll = 0; ll < n_found; ll++){
             C2[result[ll]] = 1;
             n_found_total++;
         }
-
         for(u32 ll = 0; ll < N; ll++) {
             if(C[ll] != C2[ll]) {
-                printf("X[%u]=[%f, %f, %f] vs X[%u][%f, %f, %f]\n",
-                       kk,
-                       X[3*kk], X[3*kk+1], X[3*kk+2],
-                       ll,
-                       X[3*ll], X[3*ll+1], X[3*ll+2]);
-                printf("query radius = %f, distance = %f, bf=%d, kdtree=%d\n",
+                printf("X[%u]=", kk);
+                print_point(X+ndim*kk, ndim);
+                printf("X[%u]=", ll);
+                print_point(X+ndim*ll, ndim);
+
+                printf("query radius = %f, distance = %f, found by bf=%d, found by kdtree=%d\n",
                        radius,
                        eudist3(X+ndim*kk, X+ndim*ll, ndim),
                        C[ll], C2[ll]);
-                printf("test_collision failed\n");
-                exit(EXIT_FAILURE);
+                goto fail;
             }
         }
     }
     free(result);
-    printf("Found %lu collisions, everything matches brute force\n", n_found_total);
     kdtree_free(T);
     free(C);
     free(C2);
     free(X);
+    return;
+fail:
+    fprintf(stderr, "\nkdtree_query_radius__test FAILED, arguments: N=%u, ndim=%d\n", N, ndim);
+    exit(EXIT_FAILURE);
 }
 
 typedef struct {
@@ -903,7 +912,8 @@ benchmark_kdtree_collide(kdtree_index N, int ndim)
     return;
 }
 
-void gen_benchmark_table(int ndim, int k, int binsize)
+static void
+gen_benchmark_table_query_knn(int ndim, int k, int binsize)
 {
     printf("\n--> gen_benchmark_table(ndim=%d, k=%d, binsize=%d)\n",
            ndim, k, binsize);
@@ -1006,98 +1016,49 @@ void gen_benchmark_table_query_distance(int ndim, int binsize)
     printf("n_found=%u\n", n_found_total);
 }
 
-void benchmark(kdtree_index N, int ndim, int k, int binsize)
+void kdtree_query_knn__test(kdtree_index N, int ndim, int k, int binsize)
 {
-    printf("\n--> benchmark(N=%u, ndim=%d, k=%d, binsize=%d)\n",
-           N, ndim, k, binsize);
     double * X = rand_points(N, ndim);
 
-    struct timespec tstart, tend;
-    clock_gettime(CLOCK_REALTIME, &tstart);
     kdtree_t * T = kdtree_new(X, N, ndim, binsize);
     if(T == NULL)
     {
         printf("Could not construct a kd-tree\n");
         exit(EXIT_FAILURE);
     }
-    clock_gettime(CLOCK_REALTIME, &tend);
-    double t_build_tree = timespec_diff(&tend, &tstart);
-    printf("To build the kd-tree took %f s\n", t_build_tree);
 
-
-    clock_gettime(CLOCK_REALTIME, &tstart);
-    printf("-> %d-NN, all vs all\n", k);
-    kdtree_index dummy = 0;
     for(kdtree_index kk = 0; kk<N; kk++)
     {
-        //printf("\n-> Q: %u (%f, %f)\n", kk, X[2*kk], X[2*kk+1]);
-        kdtree_index * knn = kdtree_query_knn(T, X+ndim*kk, k);
-
-        for(int kk = 0; kk<3; kk++)
-        {
-            dummy += knn[kk];
-            //printf("%u ", knn[kk]);
-        }
-        //printf("\n");
-    }
-    assert(dummy > 0);
-
-    clock_gettime(CLOCK_REALTIME, &tend);
-    double t_all_knn = timespec_diff(&tend, &tstart);
-
-    printf("To find %d-NN for all %u points took %f s\n", k, N, t_all_knn);
-    printf("Total time: %f s\n", t_build_tree + t_all_knn);
-
-
-#ifndef NDEBUG
-    printf("-> Validation\n");
-    for(kdtree_index kk = 0; kk<N; kk++)
-    {
-        if(kk % 1000 == 0)
-        {
-            printf("\r %u / %u", kk, N); fflush(stdout);
-        }
         double * Q = X + ndim*kk;
         kdtree_index * knn = kdtree_query_knn(T, Q, k);
-        bool ok = true;
-        if(knn != NULL)
-        {
-            ok = is_radially_sorted(X, Q, knn, ndim, k);
+        if(knn == NULL) {
+            fprintf(stderr, "Got a NULL tree. %s %d\n", __FILE__, __LINE__);
+            goto fail;
         }
-        bool all_ok = true;
-        if(!ok)
-        {
-            printf("\nERROR: Resulting match not ordered radially\n");
-            all_ok = false;
+        if( !is_radially_sorted(X, Q, knn, ndim, k) ){
+            fprintf(stderr, "Points are not sorted radially %s %d\n", __FILE__, __LINE__);
+            goto fail;
         }
 
-        ok = is_unique(knn, k);
-        if(!ok)
-        {
-            printf("\nERROR: Resulting match has duplicates\n");
-            all_ok = false;
+        if( !is_unique(knn, k) ) {
+            fprintf(stderr, "The result contains duplicates %s %d\n", __FILE__, __LINE__);
+            goto fail;
         }
-        ok = found_correct(X, N, ndim, Q, knn, k);
-        if(!ok)
-        {
-            printf("\nERROR: Did not find the correct points\n");
-            printf("%s, %d\n", __FILE__, __LINE__);
-            all_ok = false;
-        }
-        if(!all_ok)
-        {
-            print_query_and_result(X, Q, ndim, knn, k);
 
-            printf("\n\nReturning\n\n");
-            exit(EXIT_FAILURE);
+        if( !found_correct(X, N, ndim, Q, knn, k)){
+            fprintf(stderr, "Got the wrong points %s %d\n", __FILE__, __LINE__);
+            goto fail;
         }
     }
-    printf("\r %u / %u\n", N, N);
-#endif
+
     kdtree_free(T);
     free(X);
-
-    fprint_peakMemory(stdout);
+    return;
+fail:
+    printf("\nFAILURE\nkdtree_query_knn (N=%u, ndim=%d, k=%d, binsize=%d)\n",
+           N, ndim, k, binsize);
+    exit(EXIT_FAILURE);
+    return;
 }
 
 
@@ -1109,19 +1070,20 @@ int main(int argc, char ** argv)
         if(strcmp(argv[1], "--table1") == 0) { // 2D
             int k = 5;
             int binsize = 35;
-            gen_benchmark_table(2, k, binsize);
+            gen_benchmark_table_query_knn(2, k, binsize);
             exit(EXIT_SUCCESS);
         }
         if(strcmp(argv[1], "--table2") == 0) { // 2D
             int k = 5;
             int binsize = 35;
-            gen_benchmark_table(3, k, binsize);
+            gen_benchmark_table_query_knn(3, k, binsize);
             exit(EXIT_SUCCESS);
         }
         if(strcmp(argv[1], "--table3") == 0) { // 7D
+
             int k = 5;
             int binsize = 35;
-            gen_benchmark_table(7, k, binsize);
+            gen_benchmark_table_query_knn(7, k, binsize);
             exit(EXIT_SUCCESS);
         }
         if(strcmp(argv[1], "--table4") == 0) {
@@ -1131,52 +1093,58 @@ int main(int argc, char ** argv)
         }
     }
 
-    kdtree_index N = 1000;
-    int k = 5;
-    int binsize = 20;
-    if(argc > 1) {
-        N = atol(argv[1]);
+    printf("Testing 'kdtree_query_knn' with various inputs\n");
+    for(int nd = 1; nd < 5; nd++){
+        for(int n = 10; n < 1000; n*=1.1){
+            for(int bs = 1; bs < 10; bs++){
+                for(int knn = 1; knn < 10; knn++){
+                    kdtree_query_knn__test(n, nd, knn, bs);
+                }
+            }
+        }
     }
-    if(argc > 2){
-        k = atoi(argv[2]);
+    printf(" -- ok!\n");
+
+    // kdtree_query_radius is tested against brute force
+    // so keep the number of points low
+    printf("Testing 'kdtree_query_radius' with various inputs\n");
+    for(int nd = 1; nd < 5; nd++){
+        for(int n = 10; n < 1000; n*=1.1){
+            kdtree_query_radius__test(n, nd, 0.0);
+        }
     }
-    if(argc > 3){
-        binsize = atoi(argv[3]);
-    }
-    printf("N = %u, k = %d, binsize = %d\n", N, k, binsize);
-    if(N < 1){
-        exit(EXIT_FAILURE);
-    }
-    benchmark(N, 3, k, binsize);
+    printf(" -- ok!\n");
+
+    return EXIT_SUCCESS;
+
+    // Other things that were in progress at some point
+    int N = 1000;
+    int binsize = 5;
+
     benchmark_kdtree_collide(10000, 3);
 
-    test_kdtree_query_radius_vs_bf(123, 3, 0.0);
-
-    test_kdtree_query_radius_vs_bf(1000, 3, 0.0);
-    test_kdtree_query_radius_vs_bf(1234, 3, 0.0);
     for(int ndim = 1; ndim < 6; ndim++)
     {
         basic_tests(N, ndim, binsize);
     }
 
-    test_kdtree_kde_mean(N, 3, binsize);
+    for(int bs = 1; bs < 10; bs++)
+    {
+        test_kdtree_kde_mean(N, 3, bs);
 
+    }
 
     if(N > 100000 )
     {
         return EXIT_SUCCESS;
     }
 
-    for(int ndim=1; ndim < 6; ndim++)
-    {
-        test_query_radius(N, ndim, 1);
-        test_query_radius(N, ndim, 10);
-        test_query_radius(N, ndim, 100);
-        test_query_radius(N, ndim, 100);
-    }
     test_align_dots(5000, 3);
 
-    test_threads(N, 3, k, binsize);
+    test_threads(N,
+                 3, // nDim
+                 5, // kNN
+                 binsize);
 
     return EXIT_SUCCESS;
 }

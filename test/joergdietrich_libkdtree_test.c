@@ -34,7 +34,9 @@ int main(int argc, char ** argv)
 {
     int ndim = 3;
     int k = 5;
+    int nthreads = 1;
     printf("ndim=%d, kNN=%d\n", ndim, k);
+    printf("threads=%d\n", nthreads);
     printf("| method | N    | t_construct [ms] | t_query [ms] | t_total [ms] |\n");
     printf("| ---    | ---: | ---:             | ---:         | --:          |\n");
     size_t n_found_total = 0;
@@ -42,7 +44,7 @@ int main(int argc, char ** argv)
     float max[3] = {1000, 1000, 1000};
     for(int N = 128; N < 2<<21; N*=2){
         float * X = rand_points(N, ndim);
-        int nthreads = 1;
+
         int npoints = N;
 
         struct kd_point * pointlist = calloc(N, sizeof(kd_point));
@@ -67,6 +69,7 @@ int main(int argc, char ** argv)
             float max_dist_sq = 1.0; // max_dist_sq
             struct pqueue *nearest = kd_qnearest(kdTree, point, &max_dist_sq, k, ndim);
             n_found_total += nearest->size;
+            free(nearest);
         }
         clock_gettime(CLOCK_REALTIME, &t3);
         double t_create = 1000.0*timespec_diff(&t1, &t0);
@@ -74,6 +77,7 @@ int main(int argc, char ** argv)
         double t_total = t_create + t_scan;
         printf("| joergdietrich | %d | %.3f | %.3f | %.3f |\n", N, t_create, t_scan, t_total);
         free(X);
+        kd_destroyTree(kdTree, NULL);
     }
 
     printf("%zu\n", n_found_total); // so not everything is optimized away

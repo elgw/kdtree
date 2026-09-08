@@ -273,6 +273,27 @@ not f64 as in the other tests.
 | joergdietrich | 2097152 |         5463.280 |     5872.767 |    11336.047 |
 
 
+Using 8 threads (for the tree construction):
+
+| method        |       N | t_construct [ms] | t_query [ms] | t_total [ms] |
+|---------------|--------:|-----------------:|-------------:|-------------:|
+| joergdietrich |     128 |            1.396 |        0.042 |        1.438 |
+| joergdietrich |     256 |            1.171 |        0.094 |        1.265 |
+| joergdietrich |     512 |            1.405 |        0.194 |        1.599 |
+| joergdietrich |    1024 |            1.408 |        0.364 |        1.772 |
+| joergdietrich |    2048 |            2.110 |        0.748 |        2.858 |
+| joergdietrich |    4096 |            2.885 |        1.749 |        4.634 |
+| joergdietrich |    8192 |            4.399 |        3.922 |        8.321 |
+| joergdietrich |   16384 |            9.576 |        9.587 |       19.163 |
+| joergdietrich |   32768 |           14.084 |       21.687 |       35.771 |
+| joergdietrich |   65536 |           30.725 |       61.527 |       92.252 |
+| joergdietrich |  131072 |           62.711 |      164.561 |      227.272 |
+| joergdietrich |  262144 |          127.434 |      422.633 |      550.067 |
+| joergdietrich |  524288 |          275.677 |     1063.664 |     1339.342 |
+| joergdietrich | 1048576 |          717.373 |     2394.282 |     3111.656 |
+| joergdietrich | 2097152 |         1451.034 |     5757.086 |     7208.120 |
+
+
 </details>
 
 ### Compared to [jtsiomb/kdtree](https://github.com/jtsiomb/kdtree)

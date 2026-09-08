@@ -40,6 +40,7 @@ JDFILES = libkdtree/lib/*.c \
 joergdietrich_libkdtree_test.c
 
 JDCFLAGS = $(CFLAGS) -I libkdtree/lib/
+JDLDFLAGS = $(LDFLAGS) -lpthread
 
 joergdietrich_libkdtree_test:
-	$(CC) $(JDCFLAGS) $(JDFILES) $(LDFLAGS) -o joergdietrich_libkdtree
+	$(CC) $(JDCFLAGS) $(JDFILES) $(JDLDFLAGS) -o joergdietrich_libkdtree
