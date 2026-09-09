@@ -226,10 +226,11 @@ eudist_sq(const double * A, const double * B, const u32 ndim)
     return sum;
 }
 
-double get_median_from_strided(const double * X, // data
-                               kdtree_index N, // number of points
-                               double * T, // temp buffer
-                               kdtree_index stride) // stride
+static double
+get_median_from_strided(const double * X, // data
+                        kdtree_index N, // number of points
+                        double * T, // temp buffer
+                        kdtree_index stride) // stride
 {
     // T is a temporary buffer, should be N elements large
     // https://www.gnu.org/software/gsl/doc/html/statistics.html
@@ -249,8 +250,8 @@ double get_median_from_strided(const double * X, // data
     return median;
 }
 
-
-void bounding_box(const double * restrict X,
+static void
+bounding_box(const double * restrict X,
                   const kdtree_index N, const kdtree_index ndim,
                   double * restrict bbx)
 {
@@ -288,7 +289,7 @@ print_bbx(const double * bbx, int ndim)
 
 
 /* Recursive splitting  */
-void
+static void
 kdtree_split(kdtree_t * T,
              kdtree_index node_id,
              double * median_buffer)
@@ -333,10 +334,10 @@ kdtree_split(kdtree_t * T,
     double pivot =
         get_median_from_strided( // coordinate split_dim of the first point that
                                  // belongs to the node
-                                 T->X + node->point_offset*T->ndim + split_dim,
-                                 node->n_point,
-                                 median_buffer,
-                                 T->ndim);
+            T->X + node->point_offset*T->ndim + split_dim,
+            node->n_point,
+            median_buffer,
+            T->ndim);
     //printf("split_dim = %u, pivot = %f, from %u points\n", split_dim, pivot, node->n_point);
     node->pivot = pivot;
     //printf("[%f   (pivot=%f)   %f]\n", node->bbx[2*split_dim], pivot, node->bbx[2*split_dim+1]);
@@ -471,7 +472,7 @@ kdtree_new(const double * X,
 #endif
     return T;
 
- failTree:
+failTree:
     kdtree_free(T);
     return NULL;
 }
@@ -768,7 +769,8 @@ kdtree_query_radius(const kdtree_t * T,
     return nfound;
 }
 
-static double gaussian(double d2, double sigma22)
+static double
+gaussian(double d2, double sigma22)
 {
     // sigma22 = 2*sigma^2
     // d2 = d^2
@@ -881,7 +883,8 @@ _kdtree_kde(const kdtree_t * T,
 }
 
 
-double kdtree_kde(const kdtree_t * T,
+double
+kdtree_kde(const kdtree_t * T,
                   const double * Q,
                   const double sigma,
                   const double cutoff)

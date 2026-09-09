@@ -33,6 +33,9 @@ ifeq ($(FANALYZER),1)
 CFLAGS+=-fanalyzer
 endif
 
+# would be nice, to amalgamate the individual source files of the lib into a
+# single .c file. And make all non-public functions static ...
+
 SRC=src/kdtree.c src/pqheap.c src/quickselect.c
 OBJ=kdtree.o pqheap.o quickselect.o
 
