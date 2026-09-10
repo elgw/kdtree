@@ -13,7 +13,8 @@ request :)
 
 Notes:
 
-- C99, no dependencies.
+- C99, no dependencies besides the [GNU Scientific Library
+   (GSL)](https://www.gnu.org/software/gsl/).
 - Builds with gcc, clang and musl-gcc and zig cc under linux.
 - The size of `libkdtree.so` is 26 KB.
 - Usual warnings applies, use with caution!

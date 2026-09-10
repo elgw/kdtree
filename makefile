@@ -33,23 +33,24 @@ ifeq ($(FANALYZER),1)
 CFLAGS+=-fanalyzer
 endif
 
+CFLAGS+=`gsl-config --cflags`
+LDFLAGS+=`gsl-config --libs`
+
+
 # would be nice, to amalgamate the individual source files of the lib into a
 # single .c file. And make all non-public functions static ...
 
-SRC=src/kdtree.c src/pqheap.c src/quickselect.c
-OBJ=kdtree.o pqheap.o quickselect.o
+SRC=src/kdtree.c src/pqheap.c
+OBJ=kdtree.o pqheap.o
 
-kdtree_ut: kdtree.o test/kdtree_ut.c makefile
+kdtree_ut: $(OBJ) test/kdtree_ut.c makefile
 	$(CC) $(CFLAGS)  test/kdtree_ut.c $(OBJ) $(LDFLAGS) -o kdtree_ut
 
 kdtree.o: src/kdtree.c
 	$(CC) -c $(CFLAGS) src/kdtree.c --std=c99
 
 pqheap.o: src/pqheap.c
-	$(CC) -c $(CFLAGS) src/pqheap.o --std=c99
-
-quickselect.o: src/quickselect.c
-	$(CC) -c $(CFLAGS) src/quickselect.o --std=c99
+	$(CC) -c $(CFLAGS) src/pqheap.c --std=c99
 
 libkdtree.a: $(SRCFILES) makefile
 	$(CC) -c $(CFLAGS) $(SRC) $(LDFLAGS)

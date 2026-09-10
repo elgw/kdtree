@@ -4,10 +4,10 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include <gsl/gsl_statistics_double.h>
 
 #include "kdtree.h"
 #include "pqheap.h"
-#include "quickselect.h"
 
 // To enable costly checks
 // #define KDTREE_DEBUG
@@ -227,27 +227,16 @@ eudist_sq(const double * A, const double * B, const u32 ndim)
 }
 
 static double
-get_median_from_strided(const double * X, // data
+get_pivot_from_strided(const double * X, // data
                         kdtree_index N, // number of points
                         double * T, // temp buffer
                         kdtree_index stride) // stride
 {
     // T is a temporary buffer, should be N elements large
-    // https://www.gnu.org/software/gsl/doc/html/statistics.html
-    // quickselect
-    for(kdtree_index kk = 0; kk < N; kk++)
-    {
+    for(kdtree_index kk = 0; kk < N; kk++) {
         T[kk] = X[stride*kk];
-        //printf("(%f) ", T[kk]);
     }
-    //printf("\n");
-    //printf("N=%zu, N/2=%zu\n", N, N/2);
-#ifdef GSL
-    double median = gsl_stats_median(T, 1, N);
-#else
-    double median = quickselect(T, N, N/2);
-#endif
-    return median;
+    return gsl_stats_select(T, 1, N, N/2);
 }
 
 static void
@@ -332,7 +321,7 @@ kdtree_split(kdtree_t * T,
     node->split_dim = split_dim;
 
     double pivot =
-        get_median_from_strided( // coordinate split_dim of the first point that
+        get_pivot_from_strided( // coordinate split_dim of the first point that
                                  // belongs to the node
             T->X + node->point_offset*T->ndim + split_dim,
             node->n_point,
